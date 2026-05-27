@@ -472,7 +472,7 @@ def run_connect_bg(selected_device_str, status_var, btn_scan, btn_connect, win, 
         mac = match.group(2).strip()
 
         # Si el streaming está activo, lo detenemos temporalmente para cambiar de dispositivo de forma limpia
-        was_streaming = state in (STATE_STREAMING, STATE_CONNECTING, STATE_BT_WAIT, STATE_STARTING)
+        was_streaming = state in (STATE_STREAMING, STATE_CONNECTING, STATE_BT_WAIT, STATE_STARTING, STATE_ERROR)
         if was_streaming:
             status_var.set("Stopping LDAC streaming to change device...")
             global keep_wsl_alive
@@ -496,10 +496,10 @@ def run_connect_bg(selected_device_str, status_var, btn_scan, btn_connect, win, 
             lbl_current.config(text=f"Current Headphones: {name} ({mac})")
             # Si estaba transmitiendo, reiniciamos la transmisión
             if was_streaming:
-                status_var.set("Restarting LDAC streaming...")
                 skip_clean_boot = True
                 _start_thread = threading.Thread(target=start_ldac, daemon=True)
                 _start_thread.start()
+                status_var.set(f"{name} is already connected. Stream is restarting...")
             return
 
         # 2. Buscar y desconectar OTROS dispositivos conectados para liberar el adaptador físico
@@ -577,10 +577,10 @@ def run_connect_bg(selected_device_str, status_var, btn_scan, btn_connect, win, 
 
             # Si estaba transmitiendo, reiniciamos automáticamente la transmisión LDAC con el nuevo dispositivo
             if was_streaming:
-                status_var.set("Restarting LDAC streaming...")
                 skip_clean_boot = True
                 _start_thread = threading.Thread(target=start_ldac, daemon=True)
                 _start_thread.start()
+                status_var.set(f"Connected to {name}. Stream is restarting — watch the tray icon.")
         else:
             status_var.set("Connection error. Please retry or power on the device.")
             
@@ -724,27 +724,7 @@ def show_bluetooth_window(icon=None, item=None):
     def on_mode_change():
         cfg = load_config()
         save_config(cfg["selected_mac"], cfg["selected_name"], v_mode.get())
-        if state == STATE_STREAMING:
-            v_status.set(f"Mode changed to {v_mode.get().upper()}. Restarting stream...")
-            def _restart():
-                global keep_wsl_alive, skip_clean_boot, _start_thread
-                # Signal the running thread to stop
-                keep_wsl_alive = True
-                stop_event.set()
-                # Wait for it to actually reach STOPPED (up to 12s)
-                for _ in range(24):
-                    if state == STATE_STOPPED:
-                        break
-                    time.sleep(0.5)
-                # Now it's safe to clear and relaunch
-                stop_event.clear()
-                keep_wsl_alive = False
-                skip_clean_boot = True
-                _start_thread = threading.Thread(target=start_ldac, daemon=True)
-                _start_thread.start()
-            threading.Thread(target=_restart, daemon=True).start()
-        else:
-            v_status.set(f"Mode saved: {v_mode.get().upper()}. Will apply on next Start.")
+        v_status.set(f"Mode saved: {v_mode.get().upper()}. Restart the app to apply.")
     
     r_hq = tk.Radiobutton(frame_quality, text="🟢 Extreme Quality (990 kbps)", variable=v_mode, value="hq",
                           bg=CARD, fg=TEXT, activebackground=CARD, activeforeground=ACCENT,
