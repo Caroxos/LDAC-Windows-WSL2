@@ -1,0 +1,24 @@
+# Large Binary Distribution Files
+*.zip
+*.tar.gz
+*.msi
+*.vhdx
+alpine-rootfs.tar.gz
+usbipd-win_4.3.0.msi
+
+# Operating System Files
+desktop.ini
+Thumbs.db
+
+# Python Caches & Environments
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+env/
+
+# Application Runtime Caches & Logs
+ldac_stats.json
+err.log
+*.log
