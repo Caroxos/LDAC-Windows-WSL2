@@ -86,7 +86,7 @@ The automated installer will:
 3. Install `usbipd-win` silently (offline installer included).
 4. Extract the ultra-optimized Alpine Linux environment to `C:\LDAC_Audio`.
 5. Write the correct RAM policies (.wslconfig) and custom audio Bluetooth kernels.
-6. Place desktop shortcuts for production and test environments.
+6. Place a desktop shortcut for the production environment.
 
 ### Step 3: Run the Application
 Double-click the **`LDAC_LDAC_Audio.bat`** launcher on your desktop. 

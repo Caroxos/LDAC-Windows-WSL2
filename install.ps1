@@ -161,14 +161,12 @@ Write-Host ""
 Write-Host "[7/7] Copying control scripts and Windows frontend..." -ForegroundColor Cyan
 $filesToCopy = @(
     "ldac_tray.py",
-    "ldac_tray_test.py",
     "emisor_audio.py",
     "receptor_audio.sh",
     "prepare_alpine.py",
     "prepare_scream.py",
     "ldac_config.json",
-    "LDAC_LDAC_Audio.bat",
-    "LDAC_Test_320MB.bat"
+    "LDAC_LDAC_Audio.bat"
 )
 
 foreach ($file in $filesToCopy) {
@@ -192,14 +190,6 @@ try {
     $ShortcutProd.Description = "Start wireless LDAC Audio transmission"
     $ShortcutProd.IconLocation = "shell32.dll,224" # Elegant audio icon
     $ShortcutProd.Save()
-
-    # Test Shortcut
-    $ShortcutTest = $WshShell.CreateShortcut([System.IO.Path]::Combine([Environment]::GetFolderPath("Desktop"), "LDAC Audio Test.lnk"))
-    $ShortcutTest.TargetPath = "C:\LDAC_Audio\LDAC_Test_320MB.bat"
-    $ShortcutTest.WorkingDirectory = "C:\LDAC_Audio"
-    $ShortcutTest.Description = "Start wireless LDAC Audio test environment"
-    $ShortcutTest.IconLocation = "shell32.dll,225"
-    $ShortcutTest.Save()
     
     Write-Host "  [+] Desktop shortcuts created successfully." -ForegroundColor Green
 } catch {
