@@ -7,6 +7,15 @@ LDAC_MODE=${2:-"hq"}
 # Verify if the system is already up and headphones are connected
 if pgrep pipewire >/dev/null 2>&1 && pgrep wireplumber >/dev/null 2>&1 && bluetoothctl info "$MAC_ADDRESS" 2>/dev/null | grep -q "Connected: yes"; then
     echo "Active servers and headphones already connected. Directing audio stream directly..."
+    
+    # Wait up to 10 seconds for the bluez sink to register in PipeWire
+    for i in $(seq 1 20); do
+        if pactl list sinks short 2>/dev/null | grep -q "bluez"; then
+            break
+        fi
+        sleep 0.5
+    done
+    
     # Adjust volume
     pactl set-sink-volume @DEFAULT_SINK@ 80% >/dev/null 2>&1
     # Run the receiver directly

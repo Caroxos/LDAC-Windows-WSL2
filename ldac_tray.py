@@ -535,7 +535,7 @@ def run_connect_bg(selected_device_str, status_var, btn_scan, btn_connect, win, 
         if not paired:
             status_var.set(f"Pairing with {name} (put it in pairing mode)...")
             subprocess.run(
-                ["wsl", "-d", "Alpine", "-u", "root", "sh", "-c", f"(sleep 1.2; echo 'pair {mac}'; sleep 8) | bluetoothctl"],
+                ["wsl", "-d", "Alpine", "-u", "root", "sh", "-c", f"(sleep 1.2; echo 'agent on'; echo 'default-agent'; echo 'pair {mac}'; sleep 8) | bluetoothctl"],
                 creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=15
             )
             time.sleep(1)
@@ -544,7 +544,7 @@ def run_connect_bg(selected_device_str, status_var, btn_scan, btn_connect, win, 
         if not trusted:
             status_var.set(f"Configuring trust for {name}...")
             subprocess.run(
-                ["wsl", "-d", "Alpine", "-u", "root", "sh", "-c", f"(sleep 1.2; echo 'trust {mac}'; sleep 1) | bluetoothctl"],
+                ["wsl", "-d", "Alpine", "-u", "root", "sh", "-c", f"(sleep 1.2; echo 'agent on'; echo 'default-agent'; echo 'trust {mac}'; sleep 1) | bluetoothctl"],
                 creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=8
             )
             time.sleep(0.5)
@@ -553,7 +553,7 @@ def run_connect_bg(selected_device_str, status_var, btn_scan, btn_connect, win, 
         status_var.set(f"Connecting to {name}...")
         # Dejamos bluetoothctl abierto 8 segundos para iniciar el enlace A2DP de forma segura y completa
         subprocess.run(
-            ["wsl", "-d", "Alpine", "-u", "root", "sh", "-c", f"(sleep 1.2; echo 'connect {mac}'; sleep 8) | bluetoothctl"],
+            ["wsl", "-d", "Alpine", "-u", "root", "sh", "-c", f"(sleep 1.2; echo 'agent on'; echo 'default-agent'; echo 'connect {mac}'; sleep 8) | bluetoothctl"],
             creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=15
         )
         
