@@ -471,9 +471,11 @@ def run_connect_bg(selected_device_str, status_var, btn_scan, btn_connect, win, 
         name = match.group(1).strip()
         mac = match.group(2).strip()
 
-        # Si el streaming está activo, lo detenemos temporalmente para cambiar de dispositivo de forma limpia
-        was_streaming = state in (STATE_STREAMING, STATE_CONNECTING, STATE_BT_WAIT, STATE_STARTING, STATE_ERROR)
-        if was_streaming:
+        # was_active = stream was truly running (need soft restart keeping Alpine alive)
+        # needs_restart = any state where we should auto-start after connecting
+        was_active = state in (STATE_STREAMING, STATE_CONNECTING, STATE_BT_WAIT, STATE_STARTING)
+        needs_restart = state in (STATE_STREAMING, STATE_CONNECTING, STATE_BT_WAIT, STATE_STARTING, STATE_ERROR, STATE_STOPPED)
+        if was_active:
             status_var.set("Stopping LDAC streaming to change device...")
             global keep_wsl_alive
             keep_wsl_alive = True
@@ -494,9 +496,9 @@ def run_connect_bg(selected_device_str, status_var, btn_scan, btn_connect, win, 
             save_config(mac, name)
             status_var.set(f"{name} is already connected!")
             lbl_current.config(text=f"Current Headphones: {name} ({mac})")
-            # Si estaba transmitiendo, reiniciamos la transmisión
-            if was_streaming:
-                skip_clean_boot = True
+            if needs_restart:
+                global skip_clean_boot, _start_thread
+                skip_clean_boot = was_active  # only skip full reboot if was truly streaming
                 _start_thread = threading.Thread(target=start_ldac, daemon=True)
                 _start_thread.start()
                 status_var.set(f"{name} is already connected. Stream is restarting...")
@@ -576,8 +578,9 @@ def run_connect_bg(selected_device_str, status_var, btn_scan, btn_connect, win, 
             show_notification("Bluetooth LDAC", f"Device {name} connected successfully.")
 
             # Si estaba transmitiendo, reiniciamos automáticamente la transmisión LDAC con el nuevo dispositivo
-            if was_streaming:
-                skip_clean_boot = True
+            if needs_restart:
+                global skip_clean_boot, _start_thread
+                skip_clean_boot = was_active  # only skip full reboot if was truly streaming
                 _start_thread = threading.Thread(target=start_ldac, daemon=True)
                 _start_thread.start()
                 status_var.set(f"Connected to {name}. Stream is restarting — watch the tray icon.")
