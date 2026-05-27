@@ -724,7 +724,22 @@ def show_bluetooth_window(icon=None, item=None):
     def on_mode_change():
         cfg = load_config()
         save_config(cfg["selected_mac"], cfg["selected_name"], v_mode.get())
-        v_status.set(f"Saved mode: {v_mode.get().upper()}. Restart LDAC to apply.")
+        if state == STATE_STREAMING:
+            v_status.set(f"Mode changed to {v_mode.get().upper()}. Restarting stream...")
+            def _restart():
+                global keep_wsl_alive, skip_clean_boot, _start_thread
+                keep_wsl_alive = True
+                stop_event.set()
+                if _start_thread and _start_thread.is_alive():
+                    _start_thread.join(timeout=8)
+                stop_event.clear()
+                keep_wsl_alive = False
+                skip_clean_boot = True
+                _start_thread = threading.Thread(target=start_ldac, daemon=True)
+                _start_thread.start()
+            threading.Thread(target=_restart, daemon=True).start()
+        else:
+            v_status.set(f"Mode saved: {v_mode.get().upper()}. Will apply on next Start.")
     
     r_hq = tk.Radiobutton(frame_quality, text="🟢 Extreme Quality (990 kbps)", variable=v_mode, value="hq",
                           bg=CARD, fg=TEXT, activebackground=CARD, activeforeground=ACCENT,
@@ -1341,7 +1356,7 @@ def action_stop(icon, item):
 
 
 def action_status(icon, item):
-    show_notification("Estado LDAC", f"Estado actual: {state}")
+    show_notification("LDAC Status", f"Current status: {state}")
 
 
 def action_quit(icon, item):
