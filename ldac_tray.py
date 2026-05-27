@@ -132,7 +132,7 @@ def check_single_instance():
                 resp = messagebox.askyesno(
                     "Duplicate Instance Detected",
                     f"Another instance of LDAC Audio is active (PID {old_pid}) which may interfere with Bluetooth connection.\n\n"
-                    "¿Deseas cerrar la instancia anterior de forma automática e iniciar esta nueva?",
+                    "Do you want to automatically close the previous instance and launch this new one?",
                     parent=root
                 )
                 root.destroy()
@@ -1429,26 +1429,26 @@ def show_notification(title, message):
 
 
 # ---------------------------------------------------------------------------
-# Construccion del menu contextual
+# Context menu construction
 # ---------------------------------------------------------------------------
 def build_menu(is_running=False):
     items = []
 
     if is_running:
-        items.append(pystray.MenuItem("⏹  Detener LDAC", action_stop))
+        items.append(pystray.MenuItem("⏹  Stop LDAC", action_stop))
     else:
-        items.append(pystray.MenuItem("▶  Iniciar LDAC", action_start,
+        items.append(pystray.MenuItem("▶  Start LDAC", action_start,
                                       default=True))
 
     items.append(pystray.Menu.SEPARATOR)
     items.append(pystray.MenuItem(
-        "📊  Ver estadisticas",
+        "📊  View Statistics",
         lambda icon, item: threading.Thread(
             target=show_info_window, daemon=True
         ).start()
     ))
     items.append(pystray.MenuItem(
-        "🎧  Configurar Bluetooth",
+        "🎧  Configure Bluetooth",
         lambda icon, item: threading.Thread(
             target=show_bluetooth_window, daemon=True
         ).start()
@@ -1457,14 +1457,14 @@ def build_menu(is_running=False):
     items.append(pystray.MenuItem(f"Status: {state}", action_status,
                                    enabled=False))
     items.append(pystray.Menu.SEPARATOR)
-    items.append(pystray.MenuItem("✕  Salir", action_quit))
-    items.append(pystray.MenuItem("⚡ Forzar salida", action_force_quit))
+    items.append(pystray.MenuItem("✕  Exit", action_quit))
+    items.append(pystray.MenuItem("⚡ Force Exit", action_force_quit))
 
     return pystray.Menu(*items)
 
 
 # ---------------------------------------------------------------------------
-# Punto de entrada
+# Entry point
 # ---------------------------------------------------------------------------
 def main():
     check_single_instance()
@@ -1473,7 +1473,7 @@ def main():
     tray_icon = pystray.Icon(
         name="ldac_audio",
         icon=ICONS[STATE_STOPPED],
-        title="LDAC Audio — Detenido",
+        title="LDAC Audio — Stopped",
         menu=build_menu(False),
     )
 
