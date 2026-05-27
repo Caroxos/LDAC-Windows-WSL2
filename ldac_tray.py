@@ -914,44 +914,43 @@ def start_ldac():
             run([USBIPD, "detach", "--busid", BUSID])   # no-op si ya estaba desconectado
             run(["wsl", "--shutdown"])                   # asegurar Alpine apagado limpio
             time.sleep(1)
-        else:
-            skip_clean_boot = False
 
-        # 1. Bind USBIPD
-        ensure_device_bound()
+            # 1. Bind USBIPD
+            ensure_device_bound()
 
+            # 2. Pre-cargar modulos del kernel en Alpine
+            run(["wsl", "-d", "Alpine", "-u", "root", "modprobe", "vhci-hcd"])
+            run(["wsl", "-d", "Alpine", "-u", "root", "modprobe", "btusb"])
+            
+            # Copiar y dar permisos al script receptor de audio actualizado
+            receptor_local = os.path.join(INSTALL_DIR, "receptor_audio.sh")
+            if os.path.exists(receptor_local):
+                try:
+                    content = open(receptor_local, "r", encoding="utf-8").read()
+                    proc = subprocess.Popen(
+                        ["wsl", "-d", "Alpine", "-u", "root", "sh", "-c", "cat > /root/receptor_audio.sh"],
+                        stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                        creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo()
+                    )
+                    proc.communicate(input=content.encode("utf-8"), timeout=5)
+                except Exception:
+                    pass
+            run(["wsl", "-d", "Alpine", "-u", "root", "chmod", "+x", "/root/receptor_audio.sh"])
+            time.sleep(1)
 
-        # 2. Pre-cargar modulos del kernel en Alpine
-        run(["wsl", "-d", "Alpine", "-u", "root", "modprobe", "vhci-hcd"])
-        run(["wsl", "-d", "Alpine", "-u", "root", "modprobe", "btusb"])
-        
-        # Copiar y dar permisos al script receptor de audio actualizado
-        receptor_local = os.path.join(INSTALL_DIR, "receptor_audio.sh")
-        if os.path.exists(receptor_local):
+            # Mantener viva la distribución durante el attach
+            boot_proc = subprocess.Popen(["wsl", "-d", "Alpine", "-u", "root", "sleep", "10"], creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo())
+            time.sleep(1)
+
+            # 3. Attach USBIPD
+            run([USBIPD, "attach", "--wsl", "Alpine", "--busid", BUSID])
+
             try:
-                content = open(receptor_local, "r", encoding="utf-8").read()
-                proc = subprocess.Popen(
-                    ["wsl", "-d", "Alpine", "-u", "root", "sh", "-c", "cat > /root/receptor_audio.sh"],
-                    stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                    creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo()
-                )
-                proc.communicate(input=content.encode("utf-8"), timeout=5)
+                boot_proc.terminate()
             except Exception:
                 pass
-        run(["wsl", "-d", "Alpine", "-u", "root", "chmod", "+x", "/root/receptor_audio.sh"])
-        time.sleep(1)
-
-        # Mantener viva la distribución durante el attach
-        boot_proc = subprocess.Popen(["wsl", "-d", "Alpine", "-u", "root", "sleep", "10"], creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo())
-        time.sleep(1)
-
-        # 3. Attach USBIPD
-        run([USBIPD, "attach", "--wsl", "Alpine", "--busid", BUSID])
-
-        try:
-            boot_proc.terminate()
-        except Exception:
-            pass
+        else:
+            skip_clean_boot = False
 
         # 4. Iniciar receptor de audio en Alpine (sin ventana visible)
         set_state(STATE_BT_WAIT)
