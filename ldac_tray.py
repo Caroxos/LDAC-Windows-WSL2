@@ -994,6 +994,7 @@ def start_ldac():
 
         # 7. Esperar a que PipeWire detecte el sink Bluetooth (auriculares conectados)
         #    Consultamos pactl cada 2s hasta que aparezca el sink bluez (max 30s)
+        bluez_found = False
         for _ in range(15):
             if stop_event.is_set():
                 return
@@ -1007,10 +1008,16 @@ def start_ldac():
                 startupinfo=_startupinfo(),
             )
             if "bluez" in check.stdout:
+                bluez_found = True
                 break
             time.sleep(2)
 
-        set_state(STATE_STREAMING)
+        if bluez_found:
+            set_state(STATE_STREAMING)
+        else:
+            set_state(STATE_ERROR)
+            show_notification("LDAC", "No Bluetooth device connected. Open Configure Bluetooth to pair your headphones.")
+            return
 
         # Mantener el hilo vivo y monitorear la salud de los procesos
         while not stop_event.is_set():
