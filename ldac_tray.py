@@ -256,14 +256,14 @@ def ensure_bluetooth_active(progress_callback=None):
 
     # 1. Comprobar si hci0 ya existe Y es funcional
     # 1. Comprobar si hci0 ya existe Y es funcional
-    log("Comprobando adaptador Bluetooth (hci0)...")
+    log("Checking Bluetooth adapter (hci0)...")
     try:
         res = subprocess.run(
             ["wsl", "-d", "Alpine", "-u", "root", "test", "-d", "/sys/class/bluetooth/hci0"],
             creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=30
         )
     except (subprocess.TimeoutExpired, Exception) as e:
-        log(f"Error comprobando adaptador: {str(e)}")
+        log(f"Error checking adapter: {str(e)}")
         return False
 
     if res.returncode == 0:
@@ -273,7 +273,7 @@ def ensure_bluetooth_active(progress_callback=None):
             capture_output=True, creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=3
         )
         if chk.returncode == 0:
-            log("Adaptador hci0 activo. Levantando servicios...")
+            log("hci0 adapter active. Starting services...")
             try:
                 subprocess.run(
                     ["wsl", "-d", "Alpine", "-u", "root", "ash", "-c", startup_cmd],
@@ -283,13 +283,13 @@ def ensure_bluetooth_active(progress_callback=None):
                 pass
             return True
         else:
-            log("Adaptador hci0 no responde, reintentando attach...")
+            log("hci0 adapter not responding, retrying attach...")
 
     # 2. Si no, hacer attach
-    log("Vinculando adaptador Bluetooth USBIPD...")
+    log("Binding Bluetooth adapter via USBIPD...")
     ensure_device_bound()
 
-    log("Pre-cargando controladores de kernel en Alpine...")
+    log("Pre-loading kernel drivers in Alpine...")
     try:
         subprocess.run(["wsl", "-d", "Alpine", "-u", "root", "modprobe", "vhci-hcd"], creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=10)
     except subprocess.TimeoutExpired:
@@ -304,16 +304,16 @@ def ensure_bluetooth_active(progress_callback=None):
     boot_proc = subprocess.Popen(["wsl", "-d", "Alpine", "-u", "root", "sleep", "30"], creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo())
     time.sleep(1)
 
-    log("Acoplando adaptador Bluetooth a WSL2...")
+    log("Attaching Bluetooth adapter to WSL2...")
     try:
         subprocess.run([USBIPD, "attach", "--wsl", "Alpine", "--busid", BUSID], creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=20)
     except subprocess.TimeoutExpired:
-        log("Timeout en attach, verificando si hci0 apareció de todas formas...")
+        log("Attach timed out, checking if hci0 appeared anyway...")
 
     # Esperar hci0 (max 15s) — boot_proc sigue activo para mantener la VM viva
     hci0_found = False
     for i in range(15):
-        log(f"Esperando adaptador Bluetooth... ({i+1}/15s)")
+        log(f"Waiting for Bluetooth adapter... ({i+1}/15s)")
         try:
             res = subprocess.run(
                 ["wsl", "-d", "Alpine", "-u", "root", "test", "-d", "/sys/class/bluetooth/hci0"],
@@ -333,10 +333,10 @@ def ensure_bluetooth_active(progress_callback=None):
         pass
 
     if not hci0_found:
-        log("Error: No se detectó el adaptador Bluetooth (hci0). Verifica el dongle USB.")
+        log("Error: Bluetooth adapter (hci0) not detected. Check your USB dongle.")
         return False
 
-    log("Levantando D-Bus y bluetoothd en Alpine...")
+    log("Starting D-Bus and bluetoothd in Alpine...")
     try:
         subprocess.run(
             ["wsl", "-d", "Alpine", "-u", "root", "ash", "-c", startup_cmd],
@@ -344,7 +344,7 @@ def ensure_bluetooth_active(progress_callback=None):
         )
     except subprocess.TimeoutExpired:
         pass
-    log("Bluetooth listo para escaneo/conexión.")
+    log("Bluetooth ready for scanning/connection.")
     return True
 
 def get_discovered_devices():
