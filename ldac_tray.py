@@ -393,12 +393,11 @@ def get_discovered_devices():
                 
             disp_name = name if name else "Unknown Device"
             devices.append((disp_name, mac))
-            
         return devices
     except Exception:
         return []
 
-def run_scan_bg(status_var, listbox, btn_scan, btn_connect):
+def run_scan_bg(status_var, listbox, btn_scan, btn_connect, btn_disconnect=None):
     try:
         status_var.set("Starting Bluetooth adapter...")
         bt_ok = ensure_bluetooth_active(lambda msg: status_var.set(msg))
@@ -444,8 +443,10 @@ def run_scan_bg(status_var, listbox, btn_scan, btn_connect):
     finally:
         btn_scan.config(state="normal")
         btn_connect.config(state="normal")
+        if btn_disconnect:
+            btn_disconnect.config(state="normal")
 
-def run_connect_bg(selected_device_str, status_var, btn_scan, btn_connect, win, lbl_current):
+def run_connect_bg(selected_device_str, status_var, btn_scan, btn_connect, win, lbl_current, btn_disconnect=None):
     global _start_thread, skip_clean_boot, keep_wsl_alive
     
     def get_device_info(target_mac):
@@ -589,6 +590,8 @@ def run_connect_bg(selected_device_str, status_var, btn_scan, btn_connect, win, 
     finally:
         btn_scan.config(state="normal")
         btn_connect.config(state="normal")
+        if btn_disconnect:
+            btn_disconnect.config(state="normal")
 
 _bt_window = None
 
@@ -650,6 +653,7 @@ def show_bluetooth_window(icon=None, item=None):
         
         btn_scan.config(state="disabled")
         btn_connect.config(state="disabled")
+        btn_disconnect.config(state="disabled")
         btn_clear.config(state="disabled")
         v_status.set("Cleaning device cache...")
         
@@ -684,6 +688,7 @@ def show_bluetooth_window(icon=None, item=None):
             finally:
                 btn_scan.config(state="normal")
                 btn_connect.config(state="normal")
+                btn_disconnect.config(state="normal")
                 btn_clear.config(state="normal")
                 
         threading.Thread(target=run_clear_bg, daemon=True).start()
@@ -760,7 +765,8 @@ def show_bluetooth_window(icon=None, item=None):
     def on_scan():
         btn_scan.config(state="disabled")
         btn_connect.config(state="disabled")
-        threading.Thread(target=run_scan_bg, args=(v_status, listbox, btn_scan, btn_connect), daemon=True).start()
+        btn_disconnect.config(state="disabled")
+        threading.Thread(target=run_scan_bg, args=(v_status, listbox, btn_scan, btn_connect, btn_disconnect), daemon=True).start()
 
     def on_connect():
         sel = listbox.curselection()
@@ -770,7 +776,54 @@ def show_bluetooth_window(icon=None, item=None):
         selected_str = listbox.get(sel[0])
         btn_scan.config(state="disabled")
         btn_connect.config(state="disabled")
-        threading.Thread(target=run_connect_bg, args=(selected_str, v_status, btn_scan, btn_connect, win, lbl_current), daemon=True).start()
+        btn_disconnect.config(state="disabled")
+        threading.Thread(target=run_connect_bg, args=(selected_str, v_status, btn_scan, btn_connect, win, lbl_current, btn_disconnect), daemon=True).start()
+
+    def on_disconnect():
+        cfg = load_config()
+        mac = cfg.get("selected_mac", "")
+        name = cfg.get("selected_name", "")
+        if not mac:
+            v_status.set("No device is currently configured.")
+            return
+            
+        btn_scan.config(state="disabled")
+        btn_connect.config(state="disabled")
+        btn_disconnect.config(state="disabled")
+        v_status.set(f"Disconnecting {name}...")
+        
+        def run_disconnect_bg():
+            try:
+                # 1. Stop streaming if running
+                global keep_wsl_alive
+                keep_wsl_alive = True
+                stop_event.set()
+                if _start_thread and _start_thread.is_alive():
+                    _start_thread.join(timeout=5)
+                stop_event.clear()
+                keep_wsl_alive = False
+                
+                # 2. Run bluetoothctl disconnect
+                subprocess.run(
+                    ["wsl", "-d", "Alpine", "-u", "root", "sh", "-c", f"(echo 'agent on'; echo 'default-agent'; echo 'disconnect {mac}'; sleep 3) | bluetoothctl"],
+                    creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=10
+                )
+                
+                # 3. Clear configuration
+                save_config("", "", "sq")
+                
+                # 4. Update UI
+                lbl_current.config(text="Current Headphones: None Configured")
+                v_status.set(f"Disconnected from {name} and cleared configuration successfully.")
+                show_notification("Bluetooth LDAC", f"Device {name} disconnected.")
+            except Exception as e:
+                v_status.set(f"Error disconnecting: {str(e)}")
+            finally:
+                btn_scan.config(state="normal")
+                btn_connect.config(state="normal")
+                btn_disconnect.config(state="normal")
+                
+        threading.Thread(target=run_disconnect_bg, daemon=True).start()
 
     btn_scan = tk.Button(btn_frame, text="🔍 Scan Devices", command=on_scan,
                          bg=CARD, fg=TEXT, activebackground=ACCENT, activeforeground=BG,
@@ -781,6 +834,11 @@ def show_bluetooth_window(icon=None, item=None):
                             bg=CARD, fg=TEXT, activebackground=ACCENT, activeforeground=BG,
                             relief="flat", font=("Segoe UI", 9, "bold"), cursor="hand2", padx=10)
     btn_connect.pack(side="left", fill="x", expand=True, padx=(5, 5))
+
+    btn_disconnect = tk.Button(btn_frame, text="🔌 Disconnect", command=on_disconnect,
+                               bg=CARD, fg=TEXT, activebackground=ACCENT, activeforeground=BG,
+                               relief="flat", font=("Segoe UI", 9, "bold"), cursor="hand2", padx=10)
+    btn_disconnect.pack(side="left", fill="x", expand=True, padx=(5, 5))
 
     def on_close():
         global _bt_window
