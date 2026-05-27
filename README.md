@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
 [![RAM Idle](https://img.shields.io/badge/RAM%20Idle-~15%20MB-blueviolet?style=flat-square)](#)
 
-Fully automated, high-resolution **Sony LDAC (990 kbps)** wireless audio transmission system for Windows 10 & 11 via WSL2 Alpine Linux. 
+Fully automated, high-resolution **LDAC (990 kbps)** wireless audio transmission system for Windows 10 & 11 via WSL2 Alpine Linux. 
 
 A **100% free**, open-source alternative to commercial A2DP Bluetooth drivers ($6–$10 USD) or dangerous unsigned kernel drivers. 
 
@@ -30,7 +30,7 @@ A **100% free**, open-source alternative to commercial A2DP Bluetooth drivers ($
   │  receptor_audio.sh (Listens on UDP Port)                 │
   │                      │                                   │
   │                      ▼ (PulseAudio pacat Pipe)           │
-  │  PipeWire / WirePlumber (Official Sony LDAC 990kbps Encoder)│
+  │  PipeWire / WirePlumber (Official LDAC 990kbps Encoder)│
   │                      │                                   │
   │                      ▼ (A2DP AVDTP Stream)               │
   │  BlueZ Stack (bluetoothd & bluetoothctl)                 │
@@ -44,14 +44,14 @@ A **100% free**, open-source alternative to commercial A2DP Bluetooth drivers ($
                          │ (Bluetooth LDAC 990 kbps Wireless)
                          ▼
        Audiophile Bluetooth Headphones / Receivers 
-       (e.g., SOUNDPEATS Engine 4, Sony WH-1000XM4, etc.)
+       (e.g., compatible headsets, etc.)
 ```
 
 ---
 
 ## ✨ Features
 
-* **True Audiophile Quality (990 kbps)**: Employs the official open-source Sony LDAC encoder to stream uncompressed-like high-resolution audio.
+* **True Audiophile Quality (990 kbps)**: Employs the official open-source LDAC encoder to stream uncompressed-like high-resolution audio.
 * **Three Selectable Profiles**: 
   * 🟢 **Extreme Quality (990 kbps)**: Audiophile mode for optimal wireless fidelity.
   * 🟡 **Stable Mode (660 kbps)**: Standard LDAC quality for high-interference environments (dense 2.4GHz/Wi-Fi zones).
@@ -68,7 +68,7 @@ A **100% free**, open-source alternative to commercial A2DP Bluetooth drivers ($
 ### Prerequisites
 1. A PC running **Windows 10 (Build 19041 or higher)** or **Windows 11**.
 2. A compatible Bluetooth USB Dongle or motherboard PCIe Bluetooth card.
-3. LDAC-capable headphones (e.g., SOUNDPEATS Engine 4, Sony 1000XM4/XM5, etc.).
+3. LDAC-capable headphones.
 
 ### Step 1: Download the Package
 Go to the **[Releases](https://github.com/)** page of this repository and download the latest **`LDAC_En.zip`** archive.

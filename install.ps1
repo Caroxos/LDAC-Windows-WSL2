@@ -168,7 +168,7 @@ $filesToCopy = @(
     "prepare_scream.py",
     "ldac_config.json",
     "LDAC_LDAC_Audio.bat",
-    "LDAC_Prueba_200MB.bat"
+    "LDAC_Test_320MB.bat"
 )
 
 foreach ($file in $filesToCopy) {
@@ -195,7 +195,7 @@ try {
 
     # Test Shortcut
     $ShortcutTest = $WshShell.CreateShortcut([System.IO.Path]::Combine([Environment]::GetFolderPath("Desktop"), "LDAC Audio Test.lnk"))
-    $ShortcutTest.TargetPath = "C:\LDAC_Audio\LDAC_Prueba_200MB.bat"
+    $ShortcutTest.TargetPath = "C:\LDAC_Audio\LDAC_Test_320MB.bat"
     $ShortcutTest.WorkingDirectory = "C:\LDAC_Audio"
     $ShortcutTest.Description = "Start wireless LDAC Audio test environment"
     $ShortcutTest.IconLocation = "shell32.dll,225"

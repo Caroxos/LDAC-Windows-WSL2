@@ -56,7 +56,7 @@ def load_config():
     CONFIG_FILE = os.path.join(INSTALL_DIR, "ldac_config.json")
     default_config = {
         "selected_mac": "01:02:03:04:1E:19",
-        "selected_name": "SOUNDPEATS Engine 4",
+        "selected_name": "Wireless Headphones",
         "ldac_mode": "hq"
     }
     if not os.path.exists(CONFIG_FILE):
@@ -630,7 +630,7 @@ def show_bluetooth_window(icon=None, item=None):
              font=("Segoe UI", 12, "bold")).pack(pady=(12, 2))
     
     config = load_config()
-    current_name = config.get("selected_name", "SOUNDPEATS Engine 4")
+    current_name = config.get("selected_name", "Wireless Headphones")
     current_mac = config.get("selected_mac", "01:02:03:04:1E:19")
     
     lbl_current = tk.Label(win, text=f"Current Headphones: {current_name} ({current_mac})",
@@ -668,10 +668,10 @@ def show_bluetooth_window(icon=None, item=None):
                         )
                 
                 # Guardar config vacía/default
-                save_config("01:02:03:04:1E:19", "SOUNDPEATS Engine 4", "hq")
+                save_config("01:02:03:04:1E:19", "Wireless Headphones", "hq")
                 
                 listbox.delete(0, tk.END)
-                lbl_current.config(text="Current Headphones: SOUNDPEATS Engine 4 (01:02:03:04:1E:19)")
+                lbl_current.config(text="Current Headphones: Wireless Headphones (01:02:03:04:1E:19)")
                 v_status.set("Device cache cleared successfully!")
             except Exception as e:
                 v_status.set(f"Error clearing: {str(e)}")
