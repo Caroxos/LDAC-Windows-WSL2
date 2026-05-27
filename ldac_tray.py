@@ -496,7 +496,7 @@ def run_connect_bg(selected_device_str, status_var, btn_scan, btn_connect, win, 
             status_var.set(f"{name} is already connected!")
             lbl_current.config(text=f"Current Headphones: {name} ({mac})")
             if needs_restart:
-                skip_clean_boot = was_active  # only skip full reboot if was truly streaming
+                skip_clean_boot = True  # ALWAYS skip clean boot after successful connection!
                 _start_thread = threading.Thread(target=start_ldac, daemon=True)
                 _start_thread.start()
                 status_var.set(f"{name} is already connected. Stream is restarting...")
@@ -577,7 +577,7 @@ def run_connect_bg(selected_device_str, status_var, btn_scan, btn_connect, win, 
 
             # Si estaba transmitiendo, reiniciamos automáticamente la transmisión LDAC con el nuevo dispositivo
             if needs_restart:
-                skip_clean_boot = was_active  # only skip full reboot if was truly streaming
+                skip_clean_boot = True  # ALWAYS skip clean boot after successful connection!
                 _start_thread = threading.Thread(target=start_ldac, daemon=True)
                 _start_thread.start()
                 status_var.set(f"Connected to {name}. Stream is restarting — watch the tray icon.")
