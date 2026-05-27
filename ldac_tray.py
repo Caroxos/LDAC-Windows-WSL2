@@ -728,10 +728,15 @@ def show_bluetooth_window(icon=None, item=None):
             v_status.set(f"Mode changed to {v_mode.get().upper()}. Restarting stream...")
             def _restart():
                 global keep_wsl_alive, skip_clean_boot, _start_thread
+                # Signal the running thread to stop
                 keep_wsl_alive = True
                 stop_event.set()
-                if _start_thread and _start_thread.is_alive():
-                    _start_thread.join(timeout=8)
+                # Wait for it to actually reach STOPPED (up to 12s)
+                for _ in range(24):
+                    if state == STATE_STOPPED:
+                        break
+                    time.sleep(0.5)
+                # Now it's safe to clear and relaunch
                 stop_event.clear()
                 keep_wsl_alive = False
                 skip_clean_boot = True
@@ -1499,8 +1504,10 @@ def main():
         menu=build_menu(False),
     )
 
-    # Arrancar LDAC automaticamente al abrir la app
-    threading.Thread(target=start_ldac, daemon=True).start()
+    # Auto-start LDAC on launch — store in _start_thread so restarts can join it
+    global _start_thread
+    _start_thread = threading.Thread(target=start_ldac, daemon=True)
+    _start_thread.start()
 
     tray_icon.run()
 
