@@ -1,8 +1,8 @@
 @echo off
 :: ================================================================
-:: LDAC Audio - Portable Launcher
+:: LDAC Audio - Launcher
 :: ================================================================
-:: Runs the LDAC system tray application from the current directory.
+:: Runs the LDAC system tray application from the production directory.
 
 :: pythonw executes the script without opening any console window
-start "" pythonw "%~dp0ldac_tray.py"
+start "" pythonw "C:\LDAC_Audio\ldac_tray.py"
