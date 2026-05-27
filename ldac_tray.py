@@ -55,9 +55,9 @@ STATS_FILE   = os.path.join(tempfile.gettempdir(), "ldac_stats.json")
 def load_config():
     CONFIG_FILE = os.path.join(INSTALL_DIR, "ldac_config.json")
     default_config = {
-        "selected_mac": "01:02:03:04:1E:19",
-        "selected_name": "Wireless Headphones",
-        "ldac_mode": "hq"
+        "selected_mac": "",
+        "selected_name": "",
+        "ldac_mode": "sq"
     }
     if not os.path.exists(CONFIG_FILE):
         return default_config
@@ -631,10 +631,15 @@ def show_bluetooth_window(icon=None, item=None):
              font=("Segoe UI", 12, "bold")).pack(pady=(12, 2))
     
     config = load_config()
-    current_name = config.get("selected_name", "Wireless Headphones")
-    current_mac = config.get("selected_mac", "01:02:03:04:1E:19")
+    current_name = config.get("selected_name", "")
+    current_mac = config.get("selected_mac", "")
     
-    lbl_current = tk.Label(win, text=f"Current Headphones: {current_name} ({current_mac})",
+    if not current_mac or current_mac == "01:02:03:04:1E:19":
+        disp_text = "Current Headphones: None Configured"
+    else:
+        disp_text = f"Current Headphones: {current_name} ({current_mac})"
+        
+    lbl_current = tk.Label(win, text=disp_text,
                            bg=BG, fg=MUTED, font=("Segoe UI", 9, "italic"))
     lbl_current.pack(pady=(0, 6))
 
@@ -669,10 +674,10 @@ def show_bluetooth_window(icon=None, item=None):
                         )
                 
                 # Guardar config vacía/default
-                save_config("01:02:03:04:1E:19", "Wireless Headphones", "hq")
+                save_config("", "", "sq")
                 
                 listbox.delete(0, tk.END)
-                lbl_current.config(text="Current Headphones: Wireless Headphones (01:02:03:04:1E:19)")
+                lbl_current.config(text="Current Headphones: None Configured")
                 v_status.set("Device cache cleared successfully!")
             except Exception as e:
                 v_status.set(f"Error clearing: {str(e)}")
@@ -900,6 +905,12 @@ def rebuild_menu():
 def start_ldac():
     """Hilo que ejecuta toda la secuencia de arranque LDAC."""
     global python_proc, wsl_proc, skip_clean_boot
+
+    config = load_config()
+    selected_mac = config.get("selected_mac", "")
+    if not selected_mac or selected_mac == "01:02:03:04:1E:19":
+        set_state(STATE_STOPPED)
+        return
 
     get_dynamic_busid()
     stop_event.clear()
@@ -1483,10 +1494,14 @@ def main():
         menu=build_menu(False),
     )
 
-    # Auto-start LDAC on launch — store in _start_thread so restarts can join it
-    global _start_thread
-    _start_thread = threading.Thread(target=start_ldac, daemon=True)
-    _start_thread.start()
+    # Auto-start LDAC on launch if a valid device is configured
+    config = load_config()
+    selected_mac = config.get("selected_mac", "")
+    
+    if selected_mac and selected_mac != "01:02:03:04:1E:19":
+        global _start_thread
+        _start_thread = threading.Thread(target=start_ldac, daemon=True)
+        _start_thread.start()
 
     tray_icon.run()
 
