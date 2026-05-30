@@ -4,7 +4,7 @@ import queue
 import re
 import subprocess
 import threading
-from logger import log_message, run_logged
+from logger import log_message, run_logged, WSL_DISTRO, WSL_USER
 from sys_helpers import CREATE_NO_WINDOW, _startupinfo, safe_gui_call
 from wsl_manager import ensure_bluetooth_active, get_dynamic_busid, USBIPD
 from bt_scanner import (
@@ -35,7 +35,7 @@ def show_bluetooth_window(ctx):
         if not ctx.bt_anchor_proc or ctx.bt_anchor_proc.poll() is not None:
             log_message("Launching Window Lifecycle Keep-Alive Anchor...")
             ctx.bt_anchor_proc = subprocess.Popen(
-                ["wsl", "-d", "Alpine", "-u", "root", "sleep", "infinity"],
+                ["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "sleep", "infinity"],
                 creationflags=CREATE_NO_WINDOW,
                 startupinfo=_startupinfo()
             )
@@ -116,6 +116,20 @@ def show_bluetooth_window(ctx):
                 disp_text = f"Connected: {' & '.join(devs_strs)}"
                 value_color = GREEN
                 
+                # [AUTO-HEAL] Si detectamos un dispositivo conectado pero no hay configuración activa, auto-vinculamos
+                if not ctx.selected_mac:
+                    name, mac = connected_devs[0]
+                    log_message(f"[AUTO-HEAL] Connected device detected: {name} ({mac}). Syncing configuration and starting stream thread...")
+                    ctx.save_config(mac, name, ctx.ldac_mode)
+                    
+                    # Actualizar estado de UI
+                    safe_gui_call(win, lambda: v_status.set(f"Auto-healed connection: {name}. Starting stream..."))
+                    
+                    # Lanzar transmisión omitiendo limpieza invasiva
+                    ctx.skip_clean_boot = True
+                    from stream_manager import start_stream_thread
+                    start_stream_thread(ctx)
+                
                 # Check active codec to see if we should block LDAC quality settings
                 from stream_manager import _get_pipewire_info
                 _, codec = _get_pipewire_info()
@@ -190,7 +204,7 @@ def show_bluetooth_window(ctx):
                         # A. Intentar remoción vía bluetoothctl con timeout corto (por si dbus responde)
                         try:
                             run_logged(
-                                ["wsl", "-d", "Alpine", "-u", "root", "bluetoothctl", "remove", target_mac],
+                                ["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "bluetoothctl", "remove", target_mac],
                                 creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=3
                             )
                         except Exception:
@@ -199,7 +213,7 @@ def show_bluetooth_window(ctx):
                         # B. Eliminar físicamente los archivos de vinculación en Alpine (garantiza la limpieza)
                         try:
                             run_logged(
-                                ["wsl", "-d", "Alpine", "-u", "root", "rm", "-rf", f"/var/lib/bluetooth/*/{target_mac}"],
+                                ["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "rm", "-rf", f"/var/lib/bluetooth/*/{target_mac}"],
                                 creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=3
                             )
                         except Exception:
@@ -208,7 +222,7 @@ def show_bluetooth_window(ctx):
                     # C. Reiniciar suavemente bluetoothd para limpiar su caché interno si estuviera cargado
                     try:
                         run_logged(
-                            ["wsl", "-d", "Alpine", "-u", "root", "killall", "-9", "bluetoothd"],
+                            ["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "killall", "-9", "bluetoothd"],
                             creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=3
                         )
                     except Exception:
@@ -361,7 +375,7 @@ def show_bluetooth_window(ctx):
                 ctx.keep_wsl_alive = False
                 
                 run_logged(
-                    ["wsl", "-d", "Alpine", "-u", "root", "sh", "-c", f"(echo 'agent on'; echo 'default-agent'; echo 'disconnect {mac}'; sleep 3) | bluetoothctl"],
+                    ["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "sh", "-c", f"(echo 'agent on'; echo 'default-agent'; echo 'disconnect {mac}'; sleep 3) | bluetoothctl"],
                     creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=10
                 )
                 

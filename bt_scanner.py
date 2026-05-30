@@ -2,7 +2,7 @@ import re
 import time
 import tkinter as tk
 import subprocess
-from logger import log_message, run_logged, log_scan_results
+from logger import log_message, run_logged, log_scan_results, WSL_DISTRO, WSL_USER
 from sys_helpers import CREATE_NO_WINDOW, _startupinfo, safe_gui_call
 from wsl_manager import ensure_bluetooth_active
 
@@ -11,7 +11,7 @@ def get_wsl_paired_devices():
     devices = []
     try:
         res = run_logged(
-            ["wsl", "-d", "Alpine", "-u", "root", "sh", "-c", 
+            ["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "sh", "-c", 
              'for f in /var/lib/bluetooth/*/*/info; do [ -f "$f" ] && echo "FILE:$f" && cat "$f"; done'],
             creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=6
         )
@@ -50,7 +50,7 @@ def get_discovered_devices():
     """Obtiene la lista de todos los dispositivos en el caché de BlueZ de D-Bus."""
     try:
         res = run_logged(
-            ["wsl", "-d", "Alpine", "-u", "root",
+            ["wsl", "-d", WSL_DISTRO, "-u", WSL_USER,
              "dbus-send", "--system", "--print-reply",
              "--dest=org.bluez", "/",
              "org.freedesktop.DBus.ObjectManager.GetManagedObjects"],
@@ -98,7 +98,7 @@ def get_wsl_connected_devices():
     """Obtiene la lista de todos los dispositivos Bluetooth conectados físicamente en WSL."""
     try:
         res = run_logged(
-            ["wsl", "-d", "Alpine", "-u", "root",
+            ["wsl", "-d", WSL_DISTRO, "-u", WSL_USER,
              "dbus-send", "--system", "--print-reply",
              "--dest=org.bluez", "/",
              "org.freedesktop.DBus.ObjectManager.GetManagedObjects"],
@@ -157,13 +157,13 @@ def run_scan_bg(ctx, status_var, listbox, btn_scan, btn_connect, btn_disconnect=
         safe_gui_call(listbox, lambda: status_var.set("Verifying adapter is powered on..."))
         try:
             pwr_check = run_logged(
-                ["wsl", "-d", "Alpine", "-u", "root", "ash", "-c",
+                ["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "ash", "-c",
                  "bluetoothctl show 2>/dev/null | grep -q 'Powered: yes'"],
                 creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=5
             )
             if pwr_check.returncode != 0:
                 run_logged(
-                    ["wsl", "-d", "Alpine", "-u", "root", "ash", "-c",
+                    ["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "ash", "-c",
                      "hciconfig hci0 up 2>/dev/null; "
                      "for i in 1 2 3; do bluetoothctl power on 2>/dev/null && break; sleep 1; done"],
                     creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=10
@@ -175,7 +175,7 @@ def run_scan_bg(ctx, status_var, listbox, btn_scan, btn_connect, btn_disconnect=
         safe_gui_call(listbox, lambda: status_var.set("Searching for nearby Bluetooth devices (12s)..."))
         try:
             run_logged(
-                ["wsl", "-d", "Alpine", "-u", "root", "bluetoothctl", "--timeout", "12", "scan", "on"],
+                ["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "bluetoothctl", "--timeout", "12", "scan", "on"],
                 creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=20
             )
         except Exception:
@@ -216,7 +216,7 @@ def run_connect_bg(ctx, selected_device_str, status_var, btn_scan, btn_connect, 
     def get_device_info(target_mac):
         try:
             chk = run_logged(
-                ["wsl", "-d", "Alpine", "-u", "root", "sh", "-c", f"echo 'info {target_mac}' | bluetoothctl"],
+                ["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "sh", "-c", f"echo 'info {target_mac}' | bluetoothctl"],
                 creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=8
             )
             out = chk.stdout.decode("utf-8", errors="replace")
@@ -257,7 +257,7 @@ def run_connect_bg(ctx, selected_device_str, status_var, btn_scan, btn_connect, 
             safe_gui_call(win, lambda: status_var.set("Soft-disconnecting other Bluetooth devices..."))
             for _, c_mac in other_connected_devs:
                 run_logged(
-                    ["wsl", "-d", "Alpine", "-u", "root", "sh", "-c", f"(echo 'disconnect {c_mac}'; sleep 1) | bluetoothctl"],
+                    ["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "sh", "-c", f"(echo 'disconnect {c_mac}'; sleep 1) | bluetoothctl"],
                     creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=5
                 )
             time.sleep(0.5)
@@ -267,7 +267,7 @@ def run_connect_bg(ctx, selected_device_str, status_var, btn_scan, btn_connect, 
             ctx.save_config(mac, name)
             
             run_logged(
-                ["wsl", "-d", "Alpine", "-u", "root", "sh", "-c", 
+                ["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "sh", "-c", 
                  "PULSE_SERVER=unix:/tmp/runtime-root/pulse/native pactl set-sink-volume @DEFAULT_SINK@ 80%"],
                 creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo()
             )
@@ -293,7 +293,7 @@ def run_connect_bg(ctx, selected_device_str, status_var, btn_scan, btn_connect, 
         if not paired:
             safe_gui_call(win, lambda: status_var.set(f"Pairing with {name} (put it in pairing mode)..."))
             run_logged(
-                ["wsl", "-d", "Alpine", "-u", "root", "sh", "-c", f"(sleep 1.2; echo 'agent on'; echo 'default-agent'; echo 'scan on'; sleep 5; echo 'pair {mac}'; sleep 8; echo 'scan off') | bluetoothctl"],
+                ["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "sh", "-c", f"(sleep 1.2; echo 'agent on'; echo 'default-agent'; echo 'scan on'; sleep 5; echo 'pair {mac}'; sleep 8; echo 'scan off') | bluetoothctl"],
                 creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=22
             )
             time.sleep(1)
@@ -301,14 +301,14 @@ def run_connect_bg(ctx, selected_device_str, status_var, btn_scan, btn_connect, 
         if not trusted:
             safe_gui_call(win, lambda: status_var.set(f"Configuring trust for {name}..."))
             run_logged(
-                ["wsl", "-d", "Alpine", "-u", "root", "sh", "-c", f"(sleep 1.2; echo 'agent on'; echo 'default-agent'; echo 'trust {mac}'; sleep 1) | bluetoothctl"],
+                ["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "sh", "-c", f"(sleep 1.2; echo 'agent on'; echo 'default-agent'; echo 'trust {mac}'; sleep 1) | bluetoothctl"],
                 creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=8
             )
             time.sleep(0.5)
 
         safe_gui_call(win, lambda: status_var.set(f"Connecting to {name}..."))
         run_logged(
-            ["wsl", "-d", "Alpine", "-u", "root", "sh", "-c", f"(sleep 1.2; echo 'agent on'; echo 'default-agent'; echo 'connect {mac}'; sleep 8) | bluetoothctl"],
+            ["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "sh", "-c", f"(sleep 1.2; echo 'agent on'; echo 'default-agent'; echo 'connect {mac}'; sleep 8) | bluetoothctl"],
             creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=15
         )
         
@@ -322,7 +322,7 @@ def run_connect_bg(ctx, selected_device_str, status_var, btn_scan, btn_connect, 
             time.sleep(3.0)
             safe_gui_call(win, lambda: status_var.set(f"Re-connecting to {name} (Auto-Retry)..."))
             run_logged(
-                ["wsl", "-d", "Alpine", "-u", "root", "sh", "-c", f"(sleep 1.2; echo 'agent on'; echo 'default-agent'; echo 'connect {mac}'; sleep 8) | bluetoothctl"],
+                ["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "sh", "-c", f"(sleep 1.2; echo 'agent on'; echo 'default-agent'; echo 'connect {mac}'; sleep 8) | bluetoothctl"],
                 creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=15
             )
             time.sleep(1.0)
@@ -336,7 +336,7 @@ def run_connect_bg(ctx, selected_device_str, status_var, btn_scan, btn_connect, 
             
             try:
                 run_logged(
-                    ["wsl", "-d", "Alpine", "-u", "root", "sh", "-c", 
+                    ["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "sh", "-c", 
                      "PULSE_SERVER=unix:/tmp/runtime-root/pulse/native pactl set-sink-volume @DEFAULT_SINK@ 80%"],
                     creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=3
                 )

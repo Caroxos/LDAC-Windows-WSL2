@@ -2,7 +2,7 @@ import os
 import re
 import time
 import subprocess
-from logger import log_message, run_logged, popen_logged
+from logger import log_message, run_logged, popen_logged, WSL_DISTRO, WSL_USER
 from sys_helpers import (
     CREATE_NO_WINDOW,
     _startupinfo,
@@ -118,7 +118,7 @@ def ensure_bluetooth_active(ctx, progress_callback=None):
     log("Checking Bluetooth adapter (hci0)...")
     try:
         res = run_logged(
-            ["wsl", "-d", "Alpine", "-u", "root", "test", "-d", "/sys/class/bluetooth/hci0"],
+            ["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "test", "-d", "/sys/class/bluetooth/hci0"],
             creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=30
         )
     except Exception as e:
@@ -130,7 +130,7 @@ def ensure_bluetooth_active(ctx, progress_callback=None):
         dbus_ok = False
         try:
             dbus_check = run_logged(
-                ["wsl", "-d", "Alpine", "-u", "root", "dbus-send", "--system", "--print-reply", "--reply-timeout=1500", "--dest=org.bluez", "/", "org.freedesktop.DBus.Peer.Ping"],
+                ["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "dbus-send", "--system", "--print-reply", "--reply-timeout=1500", "--dest=org.bluez", "/", "org.freedesktop.DBus.Peer.Ping"],
                 creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=3
             )
             if dbus_check.returncode == 0:
@@ -145,7 +145,7 @@ def ensure_bluetooth_active(ctx, progress_callback=None):
         log("hci0 adapter active but Bluetooth services not responding. Starting services...")
         try:
             run_logged(
-                ["wsl", "-d", "Alpine", "-u", "root", "ash", "-c", startup_cmd],
+                ["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "ash", "-c", startup_cmd],
                 creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=20
             )
         except Exception:
@@ -158,22 +158,22 @@ def ensure_bluetooth_active(ctx, progress_callback=None):
 
     log("Pre-loading kernel drivers in Alpine...")
     try:
-        run_logged(["wsl", "-d", "Alpine", "-u", "root", "modprobe", "vhci-hcd"], creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=10)
+        run_logged(["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "modprobe", "vhci-hcd"], creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=10)
     except Exception:
         pass
     try:
-        run_logged(["wsl", "-d", "Alpine", "-u", "root", "modprobe", "btusb"], creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=10)
+        run_logged(["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "modprobe", "btusb"], creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=10)
     except Exception:
         pass
     time.sleep(1)
 
     # Mantener viva la VM durante todo el attach
-    boot_proc = popen_logged(["wsl", "-d", "Alpine", "-u", "root", "sleep", "30"], creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo())
+    boot_proc = popen_logged(["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "sleep", "30"], creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo())
     time.sleep(1)
 
     log("Attaching Bluetooth adapter to WSL2...")
     try:
-        run_logged([USBIPD, "attach", "--wsl", "Alpine", "--busid", ctx.BUSID], creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=20)
+        run_logged([USBIPD, "attach", "--wsl", WSL_DISTRO, "--busid", ctx.BUSID], creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=20)
     except Exception:
         log("Attach timed out, checking if hci0 appeared anyway...")
 
@@ -183,7 +183,7 @@ def ensure_bluetooth_active(ctx, progress_callback=None):
         log(f"Waiting for Bluetooth adapter... ({i+1}/15s)")
         try:
             res = run_logged(
-                ["wsl", "-d", "Alpine", "-u", "root", "test", "-d", "/sys/class/bluetooth/hci0"],
+                ["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "test", "-d", "/sys/class/bluetooth/hci0"],
                 creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=5
             )
             if res.returncode == 0:
@@ -205,7 +205,7 @@ def ensure_bluetooth_active(ctx, progress_callback=None):
     log("Starting D-Bus and bluetoothd in Alpine...")
     try:
         run_logged(
-            ["wsl", "-d", "Alpine", "-u", "root", "ash", "-c", startup_cmd],
+            ["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "ash", "-c", startup_cmd],
             creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=20
         )
     except Exception:

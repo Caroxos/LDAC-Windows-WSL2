@@ -1,5 +1,14 @@
 import sys
 import os
+
+# Evitar la doble carga de main.py cuando se importa desde otros módulos como 'context' o 'bt_scanner'
+if __name__ == "__main__":
+    sys.modules['main'] = sys.modules['__main__']
+
+if len(sys.argv) > 1 and sys.argv[1] == "--emisor":
+    import emisor_audio
+    emisor_audio.main()
+    sys.exit(0)
 import threading
 import time
 import subprocess
@@ -14,7 +23,7 @@ from sys_helpers import (
     cleanup_pid_file,
     resolve_usbipd_path
 )
-from logger import log_message, run_logged
+from logger import log_message, run_logged, WSL_DISTRO, WSL_USER
 from wsl_manager import get_dynamic_busid, USBIPD
 
 # ---- Variables Globales de Lanzamiento ----
@@ -137,7 +146,8 @@ def show_bt_window(icon, item):
     from gui_bt_manager import show_bluetooth_window
     threading.Thread(target=show_bluetooth_window, args=(ctx,), daemon=True).start()
 
-def build_menu_patched(is_running=False):
+def build_menu_patched(is_running=False, context_obj=None):
+    active_ctx = context_obj if context_obj is not None else ctx
     items = []
     if is_running:
         items.append(pystray.MenuItem("⏹  Stop LDAC", action_stop))
@@ -148,7 +158,8 @@ def build_menu_patched(is_running=False):
     items.append(pystray.MenuItem("📊  View Statistics", show_monitor_window))
     items.append(pystray.MenuItem("🎧  Configure Bluetooth", show_bt_window))
     items.append(pystray.Menu.SEPARATOR)
-    items.append(pystray.MenuItem(f"Status: {ctx.get_state_display()}", action_status, enabled=False))
+    status_text = active_ctx.get_state_display() if active_ctx else "Stopped"
+    items.append(pystray.MenuItem(f"Status: {status_text}", action_status, enabled=False))
     items.append(pystray.Menu.SEPARATOR)
     items.append(pystray.MenuItem("✕  Exit", action_quit))
 
@@ -158,7 +169,7 @@ def rebuild_menu(context_obj):
     if context_obj.tray_icon is None:
         return
     is_running = context_obj.state == STATE_STREAMING
-    context_obj.tray_icon.menu = build_menu_patched(is_running)
+    context_obj.tray_icon.menu = build_menu_patched(is_running, context_obj)
 
 def sleep_sentinel_loop():
     """Detecta de fondo deriva temporal para auto-resetear WSL/USBIPD tras suspender Windows."""
@@ -220,12 +231,7 @@ def main():
 
     # Limpieza preventiva en segundo plano (arranque en frío)
     def cold_start_cleanup():
-        # Limpiar configuración local en el arranque para evitar perfiles pre-cargados
-        try:
-            ctx.save_config("", "", "sq")
-        except Exception:
-            pass
-            
+        # Limpieza de subsistemas al arranque (arranque en frío) conservando perfiles configurados
         get_dynamic_busid(ctx)
         try:
             run_logged([USBIPD, "detach", "--busid", ctx.BUSID], creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=3)
@@ -233,14 +239,6 @@ def main():
             pass
         try:
             run_logged(["wsl", "--shutdown"], creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=4)
-        except Exception:
-            pass
-        # Eliminar físicamente cualquier vinculación Bluetooth antigua en la base de datos de Alpine
-        try:
-            run_logged(
-                ["wsl", "-d", "Alpine", "-u", "root", "rm", "-rf", "/var/lib/bluetooth/*/*"],
-                creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=5
-            )
         except Exception:
             pass
 

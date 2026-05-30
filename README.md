@@ -89,21 +89,38 @@ The automated installer will:
 6. Place a desktop shortcut for the production environment.
 
 ### Step 3: Run the Application
-Double-click the **`LDAC_LDAC_Audio.bat`** launcher on your desktop. 
+Double-click the **`LDAC_Audio.exe`** shortcut on your desktop (or in your installation folder).
 
-The application will start in your system tray (bottom-right toolbar).
+The application will start directly in your system tray (bottom-right toolbar).
 * **Right-click the icon** $\rightarrow$ Click **Configure Bluetooth** to scan and pair your headphones.
-* Select your preferred LDAC quality (990kbps, 660kbps, Auto).
-* Click **Start Transmission** to stream audio!
+* Select your preferred LDAC quality (990 kbps, 660 kbps, Auto).
+* **Automatic Streaming / Auto-Healing**: If your headphones are already connected physically to Windows/WSL, opening the Bluetooth configuration window will automatically auto-align and kickstart the stream with zero clicks.
 
 ---
 
-## 🛠️ Components List
+## 🛡️ Antivirus False Positives (Windows Defender / VirusTotal)
 
-* **`ldac_tray.py`**: The core system tray controller and GUI interface (Tkinter). Handles UAC escalations and WSL subsystem lifecycle.
-* **`emisor_audio.py`**: High-performance WASAPI loopback audio capturer and UDP sender.
-* **`receptor_audio.sh`**: Lightweight Alpine receiver script, managing PipeWire sockets and A2DP connection states.
-* **`prepare_alpine.py`**: VM environment compiler to bootstrap dependencies.
+Because `LDAC_Audio.exe` is compiled as a standalone binary using **PyInstaller** (to bundle Python, PyAudio, and Tkinter without requiring you to install any runtime), some security scanners on **VirusTotal** (such as Microsoft Defender's heuristic engine) may flag it as a generic threat like **`Trojan:Win32/Wacatac.B!ml`** or similar.
+
+* **What does `!ml` mean?** The `!ml` suffix stands for **Machine Learning** heuristical analysis. It is an automated statistical model flag triggered by unsigned local binaries that execute subprocesses (like attaching USB adapters via `usbipd.exe`).
+* **Is it safe?** **Yes, 100% safe.** The entire source code is open and transparent. Since you have the exact Python modules in the repository, you can verify every single line of code.
+* **Resolution**: Simply add a local folder exclusion in Windows Defender for `C:\LDAC_Audio` or the `LDAC_Audio.exe` binary.
+
+---
+
+## 🛠️ Modular Architecture Components
+
+The application is structured under a clean, modular architecture:
+* **`main.py`**: The core system tray controller and icon lifecycle manager (pystray).
+* **`gui_bt_manager.py`**: Bluetooth configuration window and auto-healing connection poller.
+* **`stream_manager.py`**: Controls the audio capture/transmission threads and PipeWire bitrates.
+* **`context.py`**: Maintains app state transitions and JSON profiles in a thread-safe context.
+* **`wsl_manager.py`**: Controls the WSL Alpine VM lifecycle, `usbipd` adapter attachments, and dbus daemon probes.
+* **`bt_scanner.py`**: Handles asynchronous Bluetooth radio scans, pairing, and D-Bus parsing.
+* **`emisor_audio.py`**: Captured loopback WASAPI audio and streams it locally over UDP.
+* **`receptor_audio.sh`**: Linux shell script executing in Alpine to pipe incoming UDP audio to PipeWire sinks.
+* **`sys_helpers.py`**: Windows native OS helpers, single-instance named kernel mutexes, and Job Objects.
+* **`logger.py`**: Universal timed auditing logger mapping all executions to `logs/ldac_session_*.log`.
 
 ---
 

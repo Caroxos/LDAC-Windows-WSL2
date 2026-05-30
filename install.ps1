@@ -160,6 +160,8 @@ wsl.exe --shutdown | Out-Null
 Write-Host ""
 Write-Host "[7/7] Copying control scripts and Windows frontend..." -ForegroundColor Cyan
 $filesToCopy = @(
+    "LDAC_Audio.exe",
+    "ldac_paths.json",
     "ldac_tray.py",
     "emisor_audio.py",
     "receptor_audio.sh",
@@ -185,10 +187,18 @@ try {
     
     # Production Shortcut
     $ShortcutProd = $WshShell.CreateShortcut([System.IO.Path]::Combine([Environment]::GetFolderPath("Desktop"), "LDAC Audio.lnk"))
-    $ShortcutProd.TargetPath = "C:\LDAC_Audio\LDAC_LDAC_Audio.bat"
-    $ShortcutProd.WorkingDirectory = "C:\LDAC_Audio"
+    
+    $exePath = Join-Path $InstallDir "LDAC_Audio.exe"
+    if (Test-Path $exePath) {
+        $ShortcutProd.TargetPath = $exePath
+        $ShortcutProd.IconLocation = "$exePath,0"
+    } else {
+        $ShortcutProd.TargetPath = Join-Path $InstallDir "LDAC_LDAC_Audio.bat"
+        $ShortcutProd.IconLocation = "shell32.dll,224" # Elegant audio icon
+    }
+    
+    $ShortcutProd.WorkingDirectory = $InstallDir
     $ShortcutProd.Description = "Start wireless LDAC Audio transmission"
-    $ShortcutProd.IconLocation = "shell32.dll,224" # Elegant audio icon
     $ShortcutProd.Save()
     
     Write-Host "  [+] Desktop shortcuts created successfully." -ForegroundColor Green

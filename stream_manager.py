@@ -5,7 +5,7 @@ import time
 import json
 import threading
 import subprocess
-from logger import log_message, run_logged, popen_logged
+from logger import log_message, run_logged, popen_logged, WSL_DISTRO, WSL_USER
 from sys_helpers import (
     CREATE_NO_WINDOW,
     _startupinfo,
@@ -78,8 +78,8 @@ def start_ldac(ctx):
             ensure_device_bound(ctx)
 
             # 2. Pre-cargar modulos
-            run_logged(["wsl", "-d", "Alpine", "-u", "root", "modprobe", "vhci-hcd"], creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=10)
-            run_logged(["wsl", "-d", "Alpine", "-u", "root", "modprobe", "btusb"], creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=10)
+            run_logged(["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "modprobe", "vhci-hcd"], creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=10)
+            run_logged(["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "modprobe", "btusb"], creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=10)
             
             # Copiar receptor_audio.sh a Alpine
             receptor_local = os.path.join(INSTALL_DIR, "receptor_audio.sh")
@@ -88,22 +88,22 @@ def start_ldac(ctx):
                     with open(receptor_local, "r", encoding="utf-8") as rf:
                         content = rf.read()
                     proc = subprocess.Popen(
-                        ["wsl", "-d", "Alpine", "-u", "root", "sh", "-c", "cat > /root/receptor_audio.sh"],
+                        ["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "sh", "-c", "cat > /root/receptor_audio.sh"],
                         stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                         creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo()
                     )
                     proc.communicate(input=content.encode("utf-8"), timeout=5)
                 except Exception:
                     pass
-            run_logged(["wsl", "-d", "Alpine", "-u", "root", "chmod", "+x", "/root/receptor_audio.sh"], creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=10)
+            run_logged(["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "chmod", "+x", "/root/receptor_audio.sh"], creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=10)
             time.sleep(1)
 
             # Mantener viva la distribución
-            boot_proc = popen_logged(["wsl", "-d", "Alpine", "-u", "root", "sleep", "10"], creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo())
+            boot_proc = popen_logged(["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "sleep", "10"], creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo())
             time.sleep(1)
 
             # 3. Attach USBIPD
-            run_logged([USBIPD, "attach", "--wsl", "Alpine", "--busid", ctx.BUSID], creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=20)
+            run_logged([USBIPD, "attach", "--wsl", WSL_DISTRO, "--busid", ctx.BUSID], creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=20)
 
             try:
                 boot_proc.terminate()
@@ -116,7 +116,7 @@ def start_ldac(ctx):
             hci0_ok = False
             try:
                 res = run_logged(
-                    ["wsl", "-d", "Alpine", "-u", "root", "test", "-d", "/sys/class/bluetooth/hci0"],
+                    ["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "test", "-d", "/sys/class/bluetooth/hci0"],
                     creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=3
                 )
                 if res.returncode == 0:
@@ -139,7 +139,7 @@ def start_ldac(ctx):
             err_file = subprocess.DEVNULL
 
         ctx.wsl_proc = popen_logged(
-            ["wsl", "-d", "Alpine", "-u", "root", "ash", "-c",
+            ["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "ash", "-c",
              f"/root/receptor_audio.sh {selected_mac} {ldac_mode}"],
             stdout=subprocess.DEVNULL,
             stderr=err_file,
@@ -154,7 +154,7 @@ def start_ldac(ctx):
             if ctx.stop_event.is_set():
                 return
             result = run_logged(
-                ["wsl", "-d", "Alpine", "-u", "root", "test", "-d", "/sys/class/bluetooth/hci0"],
+                ["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "test", "-d", "/sys/class/bluetooth/hci0"],
                 creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=5
             )
             if result.returncode == 0:
@@ -162,13 +162,22 @@ def start_ldac(ctx):
             time.sleep(1)
 
         # 6. Iniciar el emisor Python
-        ctx.python_proc = popen_logged(
-            [sys.executable, EMISOR_PY],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            creationflags=CREATE_NO_WINDOW,
-            startupinfo=_startupinfo(),
-        )
+        if getattr(sys, "frozen", False):
+            ctx.python_proc = popen_logged(
+                [sys.executable, "--emisor"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=CREATE_NO_WINDOW,
+                startupinfo=_startupinfo(),
+            )
+        else:
+            ctx.python_proc = popen_logged(
+                [sys.executable, EMISOR_PY],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=CREATE_NO_WINDOW,
+                startupinfo=_startupinfo(),
+            )
         register_process_in_job(ctx.python_proc)
 
         # 7. Esperar a que PipeWire detecte el sink
@@ -178,7 +187,7 @@ def start_ldac(ctx):
                 return
             try:
                 check = run_logged(
-                    ["wsl", "-d", "Alpine", "-u", "root", "sh", "-c",
+                    ["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "sh", "-c",
                       "PULSE_SERVER=unix:/tmp/runtime-root/pulse/native pactl list sinks short 2>/dev/null"],
                     creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=5
                 )
@@ -228,9 +237,9 @@ def start_ldac(ctx):
                     with open(err_log_path, "r", encoding="utf-8") as f:
                         err_content = f.read()
                     if "Address already in use" in err_content or "bind:" in err_content:
-                        err_msg = "UDP Port Conflict: Port 5005 is already in use inside WSL Alpine."
+                        err_msg = "UDP Port Conflict: Port 5005 is already in use inside " + WSL_DISTRO + "."
                     elif "audio server could not be started" in err_content:
-                        err_msg = "Audio Server Error: PipeWire audio server failed to start inside WSL Alpine."
+                        err_msg = "Audio Server Error: PipeWire audio server failed to start inside " + WSL_DISTRO + "."
                     elif "Bluetooth adapter hci0 did not appear" in err_content:
                         err_msg = "Bluetooth Adapter Error: Bluetooth controller (hci0) did not initialize in time."
                 except Exception:
@@ -278,7 +287,7 @@ def stop_ldac_cleanup(ctx):
         run_logged([USBIPD, "detach", "--busid", ctx.BUSID], creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=5)
         run_logged(["wsl", "--shutdown"], creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=5)
     else:
-        run_logged(["wsl", "-d", "Alpine", "-u", "root", "killall", "-9", "nc", "pacat"], creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=5)
+        run_logged(["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "killall", "-9", "nc", "pacat"], creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=5)
 
     ctx.active_codec = "?"
     ctx.state = STATE_STOPPED
@@ -287,7 +296,7 @@ def _get_ldac_bitrate(ctx):
     """Consulta el bitrate LDAC real de PipeWire o de la configuración local."""
     try:
         res = run_logged(
-            ["wsl", "-d", "Alpine", "-u", "root", "sh", "-c",
+            ["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "sh", "-c",
              "PULSE_SERVER=unix:/tmp/runtime-root/pulse/native pactl list sinks 2>/dev/null"],
             timeout=4, creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo()
         )
@@ -317,7 +326,7 @@ def _get_pipewire_info():
     """Consulta pactl en Alpine y devuelve (device_name, codec)."""
     try:
         res = run_logged(
-            ["wsl", "-d", "Alpine", "-u", "root", "sh", "-c",
+            ["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "sh", "-c",
              "PULSE_SERVER=unix:/tmp/runtime-root/pulse/native pactl list sinks 2>/dev/null"],
             timeout=4, creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo()
         )

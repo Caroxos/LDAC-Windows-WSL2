@@ -11,6 +11,7 @@ import time
 import json
 import tempfile
 import os
+from logger import WSL_DISTRO
 import audioop
 from comtypes import CLSCTX_ALL
 from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
@@ -18,7 +19,11 @@ from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
 UDP_PORT   = 5005
 CHUNK      = 1024
 
-INSTALL_DIR = os.path.dirname(os.path.abspath(__file__))
+import sys
+if getattr(sys, "frozen", False):
+    INSTALL_DIR = os.path.dirname(os.path.abspath(sys.executable))
+else:
+    INSTALL_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def get_safe_stats_file():
     t_dir = tempfile.gettempdir()
@@ -39,7 +44,7 @@ def get_wsl_ip():
     """Descubre dinámicamente la dirección IP interna de WSL2 (Alpine)"""
     try:
         # Ejecutar comando para ver la IP de eth0 en Alpine
-        output = subprocess.check_output("wsl -d Alpine ip addr show eth0", shell=True, stderr=subprocess.DEVNULL).decode("utf-8")
+        output = subprocess.check_output("wsl -d " + WSL_DISTRO + " ip addr show eth0", shell=True, stderr=subprocess.DEVNULL).decode("utf-8")
         match = re.search(r"inet\s+([0-9.]+)", output)
         if match:
             ip = match.group(1)

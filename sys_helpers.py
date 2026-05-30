@@ -9,7 +9,11 @@ import subprocess
 from logger import log_message
 
 CREATE_NO_WINDOW = 0x08000000
-INSTALL_DIR = os.path.dirname(os.path.abspath(__file__))
+import sys
+if getattr(sys, "frozen", False):
+    INSTALL_DIR = os.path.dirname(os.path.abspath(sys.executable))
+else:
+    INSTALL_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def _startupinfo():
     """STARTUPINFO con ventana oculta para subprocesos de Windows."""
@@ -75,6 +79,9 @@ def register_process_in_job(proc):
 
 def resolve_usbipd_path():
     """Busca usbipd en PATH y rutas conocidas. Devuelve la primera que exista."""
+    from logger import log_message, USBIPD_OVERRIDE_PATH
+    if USBIPD_OVERRIDE_PATH and os.path.exists(USBIPD_OVERRIDE_PATH):
+        return USBIPD_OVERRIDE_PATH
     path_in_path = shutil.which("usbipd")
     if path_in_path:
         return path_in_path

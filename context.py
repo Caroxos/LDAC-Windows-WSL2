@@ -11,7 +11,11 @@ STATE_STREAMING  = "Streaming"
 STATE_STOPPING   = "Stopping..."
 STATE_ERROR      = "Error"
 
-INSTALL_DIR = os.path.dirname(os.path.abspath(__file__))
+import sys
+if getattr(sys, "frozen", False):
+    INSTALL_DIR = os.path.dirname(os.path.abspath(sys.executable))
+else:
+    INSTALL_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(INSTALL_DIR, "ldac_config.json")
 
 class AppContext:
