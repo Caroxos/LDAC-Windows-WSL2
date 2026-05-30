@@ -1,8 +1,9 @@
 @echo off
 :: ================================================================
-:: LDAC Audio - Launcher
+:: LDAC Audio - PRODUCTION ENVIRONMENT (Main Alpine)
 :: ================================================================
-:: Runs the LDAC system tray application from the production directory.
+:: Non-elevated launcher for the LDAC system tray application.
+:: Targets Alpine with a 320 MB RAM limit.
 
 :: pythonw executes the script without opening any console window
 start "" pythonw "C:\LDAC_Audio\ldac_tray.py"

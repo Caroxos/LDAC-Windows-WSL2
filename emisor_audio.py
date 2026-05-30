@@ -17,7 +17,23 @@ from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
 
 UDP_PORT   = 5005
 CHUNK      = 1024
-STATS_FILE = os.path.join(tempfile.gettempdir(), "ldac_stats.json")
+
+INSTALL_DIR = os.path.dirname(os.path.abspath(__file__))
+
+def get_safe_stats_file():
+    t_dir = tempfile.gettempdir()
+    test_file = os.path.join(t_dir, "ldac_stats_write_test.tmp")
+    try:
+        # Validar permisos reales de escritura en la carpeta temporal
+        with open(test_file, "w") as f:
+            f.write("test")
+        os.remove(test_file)
+        return os.path.join(t_dir, "ldac_stats.json")
+    except Exception:
+        # Fallback al directorio local del programa ante GPO restrictivas
+        return os.path.join(INSTALL_DIR, "ldac_stats.json")
+
+STATS_FILE = get_safe_stats_file()
 
 def get_wsl_ip():
     """Descubre dinámicamente la dirección IP interna de WSL2 (Alpine)"""
@@ -130,37 +146,46 @@ def main():
         last_bytes       = 0
         last_volume_pct  = -1
 
-        while stream.is_active():
-            now = time.time()
-            elapsed = now - last_stats_time
+        try:
+            while stream.is_active():
+                now = time.time()
+                elapsed = now - last_stats_time
 
-            if elapsed >= 1.0:
-                sent = bytes_counter[0]
-                delta_bytes = sent - last_bytes
-                udp_kbps = int((delta_bytes * 8) / (elapsed * 1000))
-                last_bytes      = sent
-                last_stats_time = now
+                if elapsed >= 1.0:
+                    sent = bytes_counter[0]
+                    delta_bytes = sent - last_bytes
+                    udp_kbps = int((delta_bytes * 8) / (elapsed * 1000))
+                    last_bytes      = sent
+                    last_stats_time = now
 
-                # Escribir estadisticas al archivo compartido
-                try:
-                    with open(STATS_FILE, "w") as f:
-                        json.dump({
-                            "udp_kbps":  udp_kbps,
-                            "volume":    int(volume_state[0] * 100),
-                            "rate":      rate,
-                            "channels":  channels,
-                            "timestamp": now,
-                        }, f)
-                except Exception:
-                    pass
+                    # Escribir estadísticas de forma atómica para evitar bloqueos y parpadeos en la UI
+                    try:
+                        temp_fd, temp_path = tempfile.mkstemp(dir=os.path.dirname(STATS_FILE), prefix="ldac_stats_tmp")
+                        with os.fdopen(temp_fd, "w") as f:
+                            json.dump({
+                                "udp_kbps":  udp_kbps,
+                                "volume":    int(volume_state[0] * 100),
+                                "rate":      rate,
+                                "channels":  channels,
+                                "timestamp": now,
+                            }, f)
+                        os.replace(temp_path, STATS_FILE)
+                    except Exception:
+                        if 'temp_path' in locals() and os.path.exists(temp_path):
+                            try:
+                                os.remove(temp_path)
+                            except Exception:
+                                pass
 
-            # Actualizar volumen cada 100ms
-            if volume_control:
-                try:
-                    volume_state[0] = volume_control.GetMasterVolumeLevelScalar()
-                except Exception:
-                    pass
-            time.sleep(0.1)
+                # Actualizar volumen cada 100ms
+                if volume_control:
+                    try:
+                        volume_state[0] = volume_control.GetMasterVolumeLevelScalar()
+                    except Exception:
+                        pass
+                time.sleep(0.1)
+        except Exception as stream_err:
+            print(f"\n[ERROR] El flujo de audio experimentó un fallo: {stream_err}")
             
     except KeyboardInterrupt:
         print("\n[INFO] Deteniendo transmisión por petición del usuario.")

@@ -5,8 +5,11 @@ MAC_ADDRESS=${1:-"01:02:03:04:1E:19"}
 LDAC_MODE=${2:-"hq"}
 
 # Verify if the system is already up and headphones are connected
-if pgrep pipewire >/dev/null 2>&1 && pgrep wireplumber >/dev/null 2>&1 && bluetoothctl info "$MAC_ADDRESS" 2>/dev/null | grep -q "Connected: yes"; then
+if pgrep pipewire >/dev/null 2>&1 && pgrep wireplumber >/dev/null 2>&1 && pactl info >/dev/null 2>&1 && bluetoothctl info "$MAC_ADDRESS" 2>/dev/null | grep -q "Connected: yes"; then
     echo "Active servers and headphones already connected. Directing audio stream directly..."
+    
+    # Clean possible network zombies before binding to port 5005
+    killall -9 nc pacat 2>/dev/null
     
     # Wait up to 10 seconds for the bluez sink to register in PipeWire
     for i in $(seq 1 20); do
@@ -18,8 +21,15 @@ if pgrep pipewire >/dev/null 2>&1 && pgrep wireplumber >/dev/null 2>&1 && blueto
     
     # Adjust volume
     pactl set-sink-volume @DEFAULT_SINK@ 80% >/dev/null 2>&1
+    
+    # Disable Inquiry Scan and Page Scan during active streaming to prevent radio collisions
+    hciconfig hci0 noscan >/dev/null 2>&1
+    
     # Run the receiver directly
     nc -l -u -p 5005 | pacat --playback --format=s16le --rate=48000 --channels=2
+    
+    # Restore Page Scan and Inquiry Scan when the stream terminates
+    hciconfig hci0 piscan >/dev/null 2>&1
     exit 0
 fi
 
@@ -39,7 +49,7 @@ rm -rf /tmp/runtime-root/* /tmp/runtime-root/.* 2>/dev/null
 # Start dbus and bluetoothd if not running
 mkdir -p /run/dbus
 [ -f /var/run/dbus/pid ] || dbus-daemon --system --fork >/dev/null 2>&1
-pgrep bluetoothd >/dev/null || /usr/lib/bluetooth/bluetoothd & >/dev/null 2>&1
+pgrep bluetoothd >/dev/null || setsid /usr/lib/bluetooth/bluetoothd >/dev/null 2>&1 &
 
 # Start PipeWire and PipeWire-Pulse in the background
 export XDG_RUNTIME_DIR=/tmp/runtime-root
@@ -73,7 +83,7 @@ monitor.bluez.rules = [
 EOF
 
 pgrep pipewire >/dev/null || pipewire >/dev/null 2>&1 &
-pgrep pipewire-pulse >/dev/null || pipewire-pulse >/dev/null 2>&1 &
+pgrep pipewire-pulse >/dev/null || (rm -f /tmp/runtime-root/pulse/native 2>/dev/null; pipewire-pulse >/dev/null 2>&1 &)
 pgrep wireplumber >/dev/null || wireplumber >/dev/null 2>&1 &
 
 # Wait for PipeWire-Pulse communication socket to be physically ready
@@ -109,6 +119,7 @@ wireplumber >/dev/null 2>&1 &
 sleep 1.5
 
 # Ensure Bluetooth controller is powered on in Linux
+hciconfig hci0 up >/dev/null 2>&1
 echo "power on" | bluetoothctl >/dev/null 2>&1
 sleep 1
 
@@ -130,5 +141,11 @@ sleep 1
 # Set default volume to 80% to avoid it being inaudible
 pactl set-sink-volume @DEFAULT_SINK@ 80% >/dev/null 2>&1
 
+# Disable Inquiry Scan and Page Scan during active streaming to prevent radio collisions
+hciconfig hci0 noscan >/dev/null 2>&1
+
 # Listen on port 5005 and play with pacat
 nc -l -u -p 5005 | pacat --playback --format=s16le --rate=48000 --channels=2
+
+# Restore Page Scan and Inquiry Scan when the stream terminates
+hciconfig hci0 piscan >/dev/null 2>&1
