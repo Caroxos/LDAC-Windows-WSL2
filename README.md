@@ -52,12 +52,13 @@ A **100% free**, open-source alternative to commercial A2DP Bluetooth drivers ($
 ## ✨ Features
 
 * **True Audiophile Quality (990 kbps)**: Employs the official open-source LDAC encoder to stream uncompressed-like high-resolution audio.
+* **Highly Stable with Low Latency**: Engineered for a highly stable wireless connection with a low delay of **only ~80ms** (ideal for music, video playback, and general desktop use).
 * **Three Selectable Profiles**: 
   * 🟢 **Extreme Quality (990 kbps)**: Audiophile mode for optimal wireless fidelity.
   * 🟡 **Stable Mode (660 kbps)**: Standard LDAC quality for high-interference environments (dense 2.4GHz/Wi-Fi zones).
   * 🔵 **Adaptive Mode (Auto)**: Dynamically scales quality matching signal capabilities.
 * **Master Volume Integration**: Employs `PyCaw` to monitor Windows master volume changes and scales loopback audio digitally in C-speed (`audioop`) with zero latency.
-* **Ultra-Lightweight Footprint**: Custom-engineered minimal Alpine Linux VM running on only **300 MB of allocated RAM** and ~234 MB disc space (compared to gigabytes of a standard VM).
+* **Ultra-Lightweight Footprint**: Custom-engineered minimal Alpine Linux VM running on only **300 MB of allocated RAM** and ~234 MB disc space. *(Note: This RAM limit is the absolute minimum possible and cannot be decreased any further due to WSL2 fixed hypervisor overhead, such as network virtualization bridges and filesystem sharing).*
 * **Automated USB Redirection**: Integrates `usbipd-win` to dynamically discover physical PCIe/USB Bluetooth hardware and share it automatically with WSL2.
 * **Dynamic GUI Tray Application**: Keep track of the connection state, select audio profiles, and monitor real-time stream status (UDP bitrate, active headset descriptions, active codec) through a beautiful dark/cyan Windows system tray widget.
 
