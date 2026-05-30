@@ -4,8 +4,8 @@ echo '=== UDP AUDIO RECEIVER (WSL2) ==='
 MAC_ADDRESS=${1:-"01:02:03:04:1E:19"}
 LDAC_MODE=${2:-"hq"}
 
-# Verify if the system is already up and headphones are connected
-if pgrep pipewire >/dev/null 2>&1 && pgrep wireplumber >/dev/null 2>&1 && pactl info >/dev/null 2>&1 && bluetoothctl info "$MAC_ADDRESS" 2>/dev/null | grep -q "Connected: yes"; then
+# Verify if the system is already up, headphones are connected, and the active quality config matches the requested mode
+if pgrep pipewire >/dev/null 2>&1 && pgrep wireplumber >/dev/null 2>&1 && pactl info >/dev/null 2>&1 && bluetoothctl info "$MAC_ADDRESS" 2>/dev/null | grep -q "Connected: yes" && [ -f /etc/wireplumber/wireplumber.conf.d/10-bluez.conf ] && grep -q "quality = \"$LDAC_MODE\"" /etc/wireplumber/wireplumber.conf.d/10-bluez.conf; then
     echo "Active servers and headphones already connected. Directing audio stream directly..."
     
     # Clean possible network zombies before binding to port 5005
