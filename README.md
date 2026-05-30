@@ -1,6 +1,6 @@
 # LDAC Audio Windows WSL2
 
-[![Release](https://img.shields.io/github/v/release/nicolas/LDAC-Windows-WSL2?color=00e5ff&style=flat-square)](https://github.com/)
+[![Release](https://img.shields.io/github/v/release/Caroxos/LDAC-Windows-WSL2?color=00e5ff&style=flat-square)](https://github.com/Caroxos/LDAC-Windows-WSL2/releases)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011-blue?style=flat-square)](https://www.microsoft.com/windows)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
 [![RAM Limit](https://img.shields.io/badge/RAM%20Limit-300%20MB-blueviolet?style=flat-square)](#)
