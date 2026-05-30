@@ -1,0 +1,7 @@
+{
+    "enable_logging": false,
+    "logs_dir": "",
+    "wsl_distro": "Alpine",
+    "wsl_user": "root",
+    "usbipd_path": ""
+}
