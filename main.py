@@ -112,12 +112,6 @@ def show_notification(title, message):
 def build_menu(is_running=False):
     items = []
 
-    if is_running:
-        items.append(pystray.MenuItem("⏹  Stop LDAC", action_stop))
-    else:
-        items.append(pystray.MenuItem("▶  Start LDAC", action_start, default=True))
-
-    items.append(pystray.Menu.SEPARATOR)
     items.append(pystray.MenuItem(
         "📊  View Statistics",
         lambda icon, item: threading.Thread(
@@ -149,12 +143,7 @@ def show_bt_window(icon, item):
 def build_menu_patched(is_running=False, context_obj=None):
     active_ctx = context_obj if context_obj is not None else ctx
     items = []
-    if is_running:
-        items.append(pystray.MenuItem("⏹  Stop LDAC", action_stop))
-    else:
-        items.append(pystray.MenuItem("▶  Start LDAC", action_start, default=True))
 
-    items.append(pystray.Menu.SEPARATOR)
     items.append(pystray.MenuItem("📊  View Statistics", show_monitor_window))
     items.append(pystray.MenuItem("🎧  Configure Bluetooth", show_bt_window))
     items.append(pystray.Menu.SEPARATOR)

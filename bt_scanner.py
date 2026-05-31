@@ -240,7 +240,9 @@ def run_connect_bg(ctx, selected_device_str, status_var, btn_scan, btn_connect, 
         
         safe_gui_call(win, lambda: status_var.set("Checking active Bluetooth connections..."))
         connected_devs = get_wsl_connected_devices()
-        is_target_connected = any(c_mac.upper() == mac.upper() for _, c_mac in connected_devs)
+        # Verify target device details to prevent transient connection jumps before pairing
+        paired, trusted, connected = get_device_info(mac)
+        is_target_connected = connected and paired and trusted
         
         # 1. Si estaba activo, paramos de forma lógica pero conservando el hardware
         if was_active:
@@ -291,6 +293,12 @@ def run_connect_bg(ctx, selected_device_str, status_var, btn_scan, btn_connect, 
         paired, trusted, connected = get_device_info(mac)
 
         if not paired:
+            # Asegurar limpieza de emparejamientos previos parciales
+            run_logged(
+                ["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "sh", "-c", f"echo 'remove {mac}' | bluetoothctl"],
+                creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=5
+            )
+            time.sleep(0.5)
             safe_gui_call(win, lambda: status_var.set(f"Pairing with {name} (put it in pairing mode)..."))
             run_logged(
                 ["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "sh", "-c", f"(sleep 1.2; echo 'agent on'; echo 'default-agent'; echo 'scan on'; sleep 5; echo 'pair {mac}'; sleep 8; echo 'scan off') | bluetoothctl"],
@@ -307,10 +315,36 @@ def run_connect_bg(ctx, selected_device_str, status_var, btn_scan, btn_connect, 
             time.sleep(0.5)
 
         safe_gui_call(win, lambda: status_var.set(f"Connecting to {name}..."))
-        run_logged(
+        res_conn = run_logged(
             ["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "sh", "-c", f"(sleep 1.2; echo 'agent on'; echo 'default-agent'; echo 'connect {mac}'; sleep 8) | bluetoothctl"],
             creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=15
         )
+        
+        conn_out = res_conn.stdout.decode("utf-8", errors="replace")
+        if "auth failed" in conn_out or "Authentication Failed" in conn_out or "br-connection-unknown" in conn_out:
+            safe_gui_call(win, lambda: status_var.set("Authentication failed. Clearing stale pairing..."))
+            run_logged(
+                ["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "sh", "-c", f"echo 'remove {mac}' | bluetoothctl"],
+                creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=5
+            )
+            time.sleep(1.0)
+            safe_gui_call(win, lambda: status_var.set(f"Pairing with {name} cleanly (put in pairing mode)..."))
+            run_logged(
+                ["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "sh", "-c", f"(sleep 1.2; echo 'agent on'; echo 'default-agent'; echo 'scan on'; sleep 5; echo 'pair {mac}'; sleep 8; echo 'scan off') | bluetoothctl"],
+                creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=22
+            )
+            time.sleep(1.0)
+            safe_gui_call(win, lambda: status_var.set(f"Configuring trust for {name}..."))
+            run_logged(
+                ["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "sh", "-c", f"(sleep 1.2; echo 'agent on'; echo 'default-agent'; echo 'trust {mac}'; sleep 1) | bluetoothctl"],
+                creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=8
+            )
+            time.sleep(0.5)
+            safe_gui_call(win, lambda: status_var.set(f"Re-connecting to {name}..."))
+            res_conn = run_logged(
+                ["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "sh", "-c", f"(sleep 1.2; echo 'agent on'; echo 'default-agent'; echo 'connect {mac}'; sleep 8) | bluetoothctl"],
+                creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=15
+            )
         
         time.sleep(1.0)
         final_paired, final_trusted, final_conn = get_device_info(mac)
