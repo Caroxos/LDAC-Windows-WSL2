@@ -16,6 +16,13 @@ import audioop
 from comtypes import CLSCTX_ALL
 from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
 
+# Force UTF-8 output to prevent UnicodeEncodeError on non-Latin Windows locales (e.g. cp950)
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 UDP_PORT   = 5005
 CHUNK      = 1024
 
@@ -48,16 +55,16 @@ def get_wsl_ip():
         match = re.search(r"inet\s+([0-9.]+)", output)
         if match:
             ip = match.group(1)
-            print(f"[INFO] IP de WSL2 (Alpine) detectada automáticamente: {ip}")
+            print(f"[INFO] WSL2 (Alpine) IP detected automatically: {ip}")
             return ip
     except Exception as e:
         pass
     
-    print("[WARN] No se pudo detectar la IP de WSL2. Usando localhost (127.0.0.1)")
+    print("[WARN] Could not detect WSL2 IP. Using localhost (127.0.0.1)")
     return "127.0.0.1"
 
 def main():
-    print("=== EMISOR DE AUDIO WASAPI LOOPBACK (WINDOWS -> WSL2) ===")
+    print("=== WASAPI LOOPBACK AUDIO EMITTER (WINDOWS -> WSL2) ===")
     
     # 1. Obtener IP de destino
     wsl_ip = get_wsl_ip()
@@ -73,9 +80,9 @@ def main():
         devices = AudioUtilities.GetSpeakers()
         volume_control = devices.EndpointVolume
         volume_state[0] = volume_control.GetMasterVolumeLevelScalar()
-        print(f"[INFO] Mezclador de volumen de Windows detectado. Volumen inicial: {int(volume_state[0]*100)}%")
+        print(f"[INFO] Windows volume mixer detected. Initial volume: {int(volume_state[0]*100)}%")
     except Exception as e:
-        print(f"[WARN] No se pudo vincular al mezclador de volumen de Windows: {e}")
+        print(f"[WARN] Could not bind to Windows volume mixer: {e}")
         
     # 3. Inicializar PyAudio
     p = pyaudio.PyAudio()
@@ -85,7 +92,7 @@ def main():
         try:
             wasapi_info = p.get_host_api_info_by_type(pyaudio.paWASAPI)
         except IndexError:
-            print("[ERROR] WASAPI no está disponible en este sistema.")
+            print("[ERROR] WASAPI is not available on this system.")
             return
 
         # Buscar el dispositivo de salida por defecto y su loopback
@@ -99,22 +106,22 @@ def main():
                 break
                 
         if not loopback_device:
-            print("[INFO] Buscando cualquier dispositivo Loopback activo...")
+            print("[INFO] Searching for any active Loopback device...")
             for loopback in p.get_loopback_device_info_generator():
                 loopback_device = loopback
                 break
                 
         if not loopback_device:
-            print("[ERROR] No se pudo encontrar ningún dispositivo de captura Loopback (WASAPI).")
+            print("[ERROR] Could not find any Loopback capture device (WASAPI).")
             return
             
-        print(f"[INFO] Capturando de: {loopback_device['name']}")
+        print(f"[INFO] Capturing from: {loopback_device['name']}")
         
         # Configurar parámetros basados en el dispositivo
         rate = int(loopback_device["defaultSampleRate"])
         channels = loopback_device["maxInputChannels"]
         
-        print(f"[INFO] Configuración de audio: {rate} Hz, {channels} canales, formato de 16 bits")
+        print(f"[INFO] Audio configuration: {rate} Hz, {channels} channels, 16-bit format")
         
         # Contador de bytes enviados (accedido desde callback + hilo principal)
         bytes_counter = [0]
@@ -142,8 +149,8 @@ def main():
                         frames_per_buffer=CHUNK,
                         stream_callback=callback)
 
-        print(f"[ÉXITO] Transmitiendo audio en tiempo real a {wsl_ip}:{UDP_PORT}...")
-        print("Presiona Ctrl+C para detener el emisor.")
+        print(f"[OK] Streaming audio in real-time to {wsl_ip}:{UDP_PORT}...")
+        print("Press Ctrl+C to stop the emitter.")
         
         stream.start_stream()
 
@@ -190,19 +197,19 @@ def main():
                         pass
                 time.sleep(0.1)
         except Exception as stream_err:
-            print(f"\n[ERROR] El flujo de audio experimentó un fallo: {stream_err}")
+            print(f"\n[ERROR] Audio stream experienced a failure: {stream_err}")
             
     except KeyboardInterrupt:
-        print("\n[INFO] Deteniendo transmisión por petición del usuario.")
+        print("\n[INFO] Stopping transmission by user request.")
     except Exception as e:
-        print(f"\n[ERROR] Ocurrió un fallo en el emisor: {e}")
+        print(f"\n[ERROR] Emitter encountered a failure: {e}")
     finally:
         if 'stream' in locals() and stream.is_active():
             stream.stop_stream()
             stream.close()
         p.terminate()
         sock.close()
-        print("[INFO] Recursos de audio y red cerrados correctamente.")
+        print("[INFO] Audio and network resources closed successfully.")
 
 if __name__ == "__main__":
     main()

@@ -1,6 +1,13 @@
 import sys
 import os
 
+# Force UTF-8 output to prevent UnicodeEncodeError on non-Latin Windows locales (e.g. cp950)
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 # Evitar la doble carga de main.py cuando se importa desde otros módulos como 'context' o 'bt_scanner'
 if __name__ == "__main__":
     sys.modules['main'] = sys.modules['__main__']
