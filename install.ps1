@@ -78,11 +78,11 @@ if (-not (Test-Path $usbipdPath)) {
     
     # Run silent installation of MSI
     Write-Host "  [*] Running usbipd installer..." -ForegroundColor Yellow
-    $installProc = Start-Process msiexec.exe -ArgumentList "/i '$localMsi' /quiet /norestart" -Wait -PassThru
+    $installProc = Start-Process -FilePath "msiexec.exe" -ArgumentList @("/i", $localMsi, "/quiet", "/norestart") -Wait -PassThru
     if ($installProc.ExitCode -eq 0) {
         Write-Host "  [+] usbipd-win installed successfully." -ForegroundColor Green
     } else {
-        Write-Host "  [!] Warning: usbipd installer reported exit code: $($installProc.ExitCode). Reboot might be required." -ForegroundColor Orange
+        Write-Host "  [!] Warning: usbipd installer reported exit code: $($installProc.ExitCode). Reboot might be required." -ForegroundColor Red
     }
 } else {
     Write-Host "  [+] usbipd-win is already present in the system." -ForegroundColor Green
@@ -139,7 +139,7 @@ if (Test-Path $bzImageSource) {
     Copy-Item $bzImageSource $bzImageDest -Force | Out-Null
     Write-Host "  [+] Custom Kernel (bzImage) copied to $bzImageDest." -ForegroundColor Green
 } else {
-    Write-Host "  [!] Warning: 'bzImage' was not found in the local folder. The default Windows kernel will be used." -ForegroundColor Orange
+    Write-Host "  [!] Warning: 'bzImage' was not found in the local folder. The default Windows kernel will be used." -ForegroundColor Red
 }
 
 # Write global user .wslconfig using clean carriage-return injection
@@ -203,7 +203,7 @@ try {
     
     Write-Host "  [+] Desktop shortcuts created successfully." -ForegroundColor Green
 } catch {
-    Write-Host "  [!] Failed to create Desktop shortcuts automatically." -ForegroundColor Orange
+    Write-Host "  [!] Failed to create Desktop shortcuts automatically." -ForegroundColor Red
 }
 
 Write-Host ""
