@@ -4,8 +4,14 @@ import subprocess
 import threading
 import json
 from datetime import datetime
-
 import sys
+
+# Force UTF-8 output to prevent UnicodeEncodeError on non-Latin Windows locales (e.g. cp950)
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
 if getattr(sys, "frozen", False):
     INSTALL_DIR = os.path.dirname(os.path.abspath(sys.executable))
 else:

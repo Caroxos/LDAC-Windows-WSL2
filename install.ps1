@@ -78,11 +78,13 @@ if (-not (Test-Path $usbipdPath)) {
     
     # Run silent installation of MSI
     Write-Host "  [*] Running usbipd installer..." -ForegroundColor Yellow
-    $installProc = Start-Process msiexec.exe -ArgumentList "/i '$localMsi' /quiet /norestart" -Wait -PassThru
+    $installProc = Start-Process msiexec.exe -ArgumentList "/i `"$localMsi`" /qn /norestart" -Wait -PassThru
     if ($installProc.ExitCode -eq 0) {
         Write-Host "  [+] usbipd-win installed successfully." -ForegroundColor Green
+    } elseif ($installProc.ExitCode -eq 3010) {
+        Write-Host "  [+] usbipd-win installed successfully (Reboot required)." -ForegroundColor Green
     } else {
-        Write-Host "  [!] Warning: usbipd installer reported exit code: $($installProc.ExitCode). Reboot might be required." -ForegroundColor Orange
+        Write-Host "  [!] Warning: usbipd installer reported exit code: $($installProc.ExitCode). Reboot might be required." -ForegroundColor Yellow
     }
 } else {
     Write-Host "  [+] usbipd-win is already present in the system." -ForegroundColor Green
@@ -113,7 +115,8 @@ if (-not (Test-Path $tarFile)) {
 
 # Shutdown any active instance for safety
 wsl.exe --shutdown | Out-Null
-if (wsl.exe -l | Select-String -Pattern "^Alpine\b") {
+$wslList = (wsl.exe -l -q | Out-String) -replace "`0", ""
+if ($wslList -match "Alpine") {
     Write-Host "  [*] Previous Alpine distribution detected. Registering clean instance..." -ForegroundColor Yellow
     wsl.exe --unregister Alpine | Out-Null
     Start-Sleep -Seconds 1
@@ -135,16 +138,22 @@ Write-Host "[6/7] Configuring custom WSL audio Kernel and RAM limit..." -Foregro
 $bzImageSource = Join-Path $SourcePath "bzImage"
 $bzImageDest = Join-Path $kernelDir "bzImage"
 
+$hasCustomKernel = $false
 if (Test-Path $bzImageSource) {
     Copy-Item $bzImageSource $bzImageDest -Force | Out-Null
     Write-Host "  [+] Custom Kernel (bzImage) copied to $bzImageDest." -ForegroundColor Green
+    $hasCustomKernel = $true
 } else {
-    Write-Host "  [!] Warning: 'bzImage' was not found in the local folder. The default Windows kernel will be used." -ForegroundColor Orange
+    Write-Host "  [!] Warning: 'bzImage' was not found in the local folder. The default Windows kernel will be used." -ForegroundColor Yellow
 }
 
 # Write global user .wslconfig using clean carriage-return injection
 $wslconfigPath = Join-Path $env:USERPROFILE ".wslconfig"
-$wslconfigContent = "[wsl2]" + [char]13 + [char]10 + "kernel=C:\\LDAC_Audio\\kernel\\bzImage" + [char]13 + [char]10 + "memory=320MB" + [char]13 + [char]10 + "processors=4" + [char]13 + [char]10 + "guiApplications=false"
+if ($hasCustomKernel) {
+    $wslconfigContent = "[wsl2]" + [char]13 + [char]10 + "kernel=C:\\LDAC_Audio\\kernel\\bzImage" + [char]13 + [char]10 + "memory=320MB" + [char]13 + [char]10 + "processors=4" + [char]13 + [char]10 + "guiApplications=false"
+} else {
+    $wslconfigContent = "[wsl2]" + [char]13 + [char]10 + "memory=320MB" + [char]13 + [char]10 + "processors=4" + [char]13 + [char]10 + "guiApplications=false"
+}
 
 try {
     Set-Content -Path $wslconfigPath -Value $wslconfigContent -Force
@@ -203,7 +212,7 @@ try {
     
     Write-Host "  [+] Desktop shortcuts created successfully." -ForegroundColor Green
 } catch {
-    Write-Host "  [!] Failed to create Desktop shortcuts automatically." -ForegroundColor Orange
+    Write-Host "  [!] Failed to create Desktop shortcuts automatically." -ForegroundColor Yellow
 }
 
 Write-Host ""

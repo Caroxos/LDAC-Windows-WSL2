@@ -1,7 +1,16 @@
+import sys
 import re
 import time
 import tkinter as tk
 import subprocess
+
+# Force UTF-8 output to prevent UnicodeEncodeError on non-Latin Windows locales (e.g. cp950)
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 from logger import log_message, run_logged, log_scan_results, WSL_DISTRO, WSL_USER
 from sys_helpers import CREATE_NO_WINDOW, _startupinfo, safe_gui_call
 from wsl_manager import ensure_bluetooth_active
