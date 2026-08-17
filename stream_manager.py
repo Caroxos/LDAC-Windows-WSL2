@@ -94,12 +94,13 @@ def start_ldac(ctx):
                 try:
                     with open(receptor_local, "r", encoding="utf-8") as rf:
                         content = rf.read()
+                    content_clean = content.replace("\r\n", "\n").replace("\r", "\n")
                     proc = subprocess.Popen(
                         ["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "sh", "-c", "cat > /root/receptor_audio.sh"],
                         stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                         creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo()
                     )
-                    proc.communicate(input=content.encode("utf-8"), timeout=5)
+                    proc.communicate(input=content_clean.encode("utf-8"), timeout=5)
                 except Exception:
                     pass
             run_logged(["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "chmod", "+x", "/root/receptor_audio.sh"], creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=10)
