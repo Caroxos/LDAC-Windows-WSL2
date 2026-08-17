@@ -2,6 +2,7 @@ import os
 import re
 import time
 import subprocess
+import shutil
 from logger import log_message, run_logged, popen_logged, WSL_DISTRO, WSL_USER
 from sys_helpers import (
     CREATE_NO_WINDOW,
@@ -89,7 +90,7 @@ def ensure_bluetooth_active(ctx, progress_callback=None):
             "usbipd-win Required",
             "The 'usbipd-win' tool was not found on your system.\n\n"
             "Please download and install it from the official repository:\n"
-            "https://github.com/duncanthrax/scream/releases (usbipd-win)\n"
+            "https://github.com/dorssel/usbipd-win/releases\n"
             "to share your physical Bluetooth adapter with WSL2."
         )
         return False
