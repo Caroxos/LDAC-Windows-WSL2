@@ -11,8 +11,33 @@ import time
 import json
 import tempfile
 import os
+import array
 from logger import WSL_DISTRO
-import audioop
+
+# Compatibilidad con Python 3.13+ (audioop eliminado en PEP 594)
+try:
+    import audioop
+except ImportError:
+    try:
+        import audioop_lts as audioop
+    except ImportError:
+        audioop = None
+
+def scale_volume(data, factor):
+    """Escala el volumen PCM de 16-bit de forma segura y eficiente."""
+    if factor >= 0.99:
+        return data
+    if audioop is not None:
+        return audioop.mul(data, 2, factor)
+    # Fallback puro en Python usando array de enteros de 16 bits
+    try:
+        samples = array.array('h', data)
+        for i in range(len(samples)):
+            samples[i] = int(samples[i] * factor)
+        return samples.tobytes()
+    except Exception:
+        return data
+
 from comtypes import CLSCTX_ALL
 from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
 
@@ -118,10 +143,8 @@ def main():
         print(f"[INFO] Capturing from: {loopback_device['name']}")
         
         # Configurar parámetros basados en el dispositivo
-        rate = int(loopback_device["defaultSampleRate"])
-        channels = loopback_device["maxInputChannels"]
-        
-        print(f"[INFO] Audio configuration: {rate} Hz, {channels} channels, 16-bit format")
+        native_rate = int(loopback_device.get("defaultSampleRate", 48000))
+        native_channels = int(loopback_device.get("maxInputChannels", 2))
         
         # Contador de bytes enviados (accedido desde callback + hilo principal)
         bytes_counter = [0]
@@ -130,24 +153,37 @@ def main():
         def callback(in_data, frame_count, time_info, status):
             try:
                 factor = volume_state[0]
-                if factor < 0.99:
-                    scaled_data = audioop.mul(in_data, 2, factor)
-                else:
-                    scaled_data = in_data
+                scaled_data = scale_volume(in_data, factor)
                 sock.sendto(scaled_data, (wsl_ip, UDP_PORT))
                 bytes_counter[0] += len(scaled_data)
             except Exception:
                 pass
             return (in_data, pyaudio.paContinue)
 
-        # Abrir el stream de WASAPI Loopback
-        stream = p.open(format=pyaudio.paInt16,
-                        channels=channels,
-                        rate=rate,
-                        input=True,
-                        input_device_index=loopback_device["index"],
-                        frames_per_buffer=CHUNK,
-                        stream_callback=callback)
+        # Abrir el stream de WASAPI Loopback (preferir 48000 Hz estéreo para coincidir con el receptor pacat)
+        rate = 48000
+        channels = 2
+        try:
+            stream = p.open(format=pyaudio.paInt16,
+                            channels=channels,
+                            rate=rate,
+                            input=True,
+                            input_device_index=loopback_device["index"],
+                            frames_per_buffer=CHUNK,
+                            stream_callback=callback)
+        except Exception:
+            # Si el hardware exige exclusivamente su formato nativo, hacer fallback
+            rate = native_rate
+            channels = min(native_channels, 2)
+            stream = p.open(format=pyaudio.paInt16,
+                            channels=channels,
+                            rate=rate,
+                            input=True,
+                            input_device_index=loopback_device["index"],
+                            frames_per_buffer=CHUNK,
+                            stream_callback=callback)
+
+        print(f"[INFO] Audio stream active: {rate} Hz, {channels} channels, 16-bit format")
 
         print(f"[OK] Streaming audio in real-time to {wsl_ip}:{UDP_PORT}...")
         print("Press Ctrl+C to stop the emitter.")
