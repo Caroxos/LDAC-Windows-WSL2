@@ -3,6 +3,8 @@ echo '=== UDP AUDIO RECEIVER (WSL2) ==='
 
 MAC_ADDRESS=${1:-"01:02:03:04:1E:19"}
 LDAC_MODE=${2:-"hq"}
+SAMPLE_RATE=${3:-"48000"}
+CHANNELS=${4:-"2"}
 
 # Verify if the system is already up, headphones are connected, and the active quality config matches the requested mode
 if pgrep pipewire >/dev/null 2>&1 && pgrep wireplumber >/dev/null 2>&1 && pactl info >/dev/null 2>&1 && bluetoothctl info "$MAC_ADDRESS" 2>/dev/null | grep -q "Connected: yes" && [ -f /etc/wireplumber/wireplumber.conf.d/10-bluez.conf ] && grep -q "quality = \"$LDAC_MODE\"" /etc/wireplumber/wireplumber.conf.d/10-bluez.conf; then
@@ -26,7 +28,7 @@ if pgrep pipewire >/dev/null 2>&1 && pgrep wireplumber >/dev/null 2>&1 && pactl 
     hciconfig hci0 noscan >/dev/null 2>&1
     
     # Run the receiver directly
-    nc -l -u -p 5005 | pacat --playback --format=s16le --rate=48000 --channels=2
+    nc -l -u -p 5005 | pacat --playback --format=s16le --rate=${SAMPLE_RATE} --channels=${CHANNELS}
     
     # Restore Page Scan and Inquiry Scan when the stream terminates
     hciconfig hci0 piscan >/dev/null 2>&1
@@ -145,7 +147,7 @@ pactl set-sink-volume @DEFAULT_SINK@ 80% >/dev/null 2>&1
 hciconfig hci0 noscan >/dev/null 2>&1
 
 # Listen on port 5005 and play with pacat
-nc -l -u -p 5005 | pacat --playback --format=s16le --rate=48000 --channels=2
+nc -l -u -p 5005 | pacat --playback --format=s16le --rate=${SAMPLE_RATE} --channels=${CHANNELS}
 
 # Restore Page Scan and Inquiry Scan when the stream terminates
 hciconfig hci0 piscan >/dev/null 2>&1
