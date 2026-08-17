@@ -9,7 +9,8 @@
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
     Write-Host "[*] Requesting Administrator privileges..." -ForegroundColor Yellow
-    Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File '$PSCommandPath'" -Verb RunAs
+    $scriptDir = if ($PSCommandPath) { Split-Path -Parent $PSCommandPath } else { (Get-Location).Path }
+    Start-Process powershell.exe -WorkingDirectory "$scriptDir" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
     Exit
 }
 
@@ -25,52 +26,77 @@ Write-Host " system in a fully automated way." -ForegroundColor Gray
 Write-Host "=====================================================================" -ForegroundColor Cyan
 Write-Host ""
 
-$confirm = Read-Host "[?] Do you want to start the installation now? (Y/N)"
-if ($confirm.ToUpper() -ne "Y") {
-    Write-Host "[-] Installation cancelled by the user." -ForegroundColor Red
-    Start-Sleep -Seconds 2
+Write-Host "[?] Do you want to start the installation now? [Y/n]: " -NoNewline -ForegroundColor Cyan
+$confirm = Read-Host
+if (-not [string]::IsNullOrWhiteSpace($confirm) -and $confirm -notmatch '^(y|yes|s|si|sí)$') {
+    Write-Host "[-] Installation cancelled by user." -ForegroundColor Yellow
+    Write-Host ""
+    Read-Host "Press Enter to exit..."
     Exit
 }
 
 $InstallDir = "C:\LDAC_Audio"
-$SourcePath = Split-Path -Parent $MyInvocation.MyCommand.Path
+$SourcePath = if ($PSCommandPath) { Split-Path -Parent $PSCommandPath } elseif ($MyInvocation.MyCommand.Path) { Split-Path -Parent $MyInvocation.MyCommand.Path } else { (Get-Location).Path }
+$rebootRequired = $false
 
-# 2. Enable Windows features for WSL2
+# 2. Enable Windows features for WSL2 & Virtual Machine Platform
 Write-Host ""
-Write-Host "[1/7] Enabling optional Windows features (WSL2 and Virtual Machine Platform)..." -ForegroundColor Cyan
+Write-Host "[1/7] Enabling optional Windows features (WSL2 & Virtual Machine Platform)..." -ForegroundColor Cyan
 try {
-    # Attempt to enable without rebooting
-    dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart | Out-Null
-    dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart | Out-Null
+    $dism1 = Start-Process dism.exe -ArgumentList "/online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart" -NoNewWindow -Wait -PassThru
+    if ($dism1.ExitCode -eq 3010) { $rebootRequired = $true }
+
+    $dism2 = Start-Process dism.exe -ArgumentList "/online /enable-feature /featurename:VirtualMachinePlatform /all /norestart" -NoNewWindow -Wait -PassThru
+    if ($dism2.ExitCode -eq 3010) { $rebootRequired = $true }
+
     Write-Host "  [+] Virtualization and WSL features enabled successfully." -ForegroundColor Green
 } catch {
-    Write-Host "  [!] Error enabling optional features with DISM: $_" -ForegroundColor Red
+    Write-Host "  [!] Warning with DISM: $_" -ForegroundColor Yellow
 }
 
-# 3. Ensure WSL is updated
+# 3. Ensure WSL is installed and updated
 Write-Host ""
-Write-Host "[2/7] Ensuring WSL subsystem is up to date..." -ForegroundColor Cyan
-wsl.exe --update | Out-Null
-Write-Host "  [+] WSL Engine updated successfully." -ForegroundColor Green
+Write-Host "[2/7] Checking and updating WSL subsystem..." -ForegroundColor Cyan
+$wslStatus = & wsl.exe --status 2>&1 | Out-String
+if ($LASTEXITCODE -ne 0 -or $wslStatus -match "not installed") {
+    Write-Host "  [*] WSL base package not detected. Installing WSL..." -ForegroundColor Yellow
+    $wslInstall = Start-Process wsl.exe -ArgumentList "--install --no-distribution" -NoNewWindow -Wait -PassThru
+    if ($wslInstall.ExitCode -eq 3010) {
+        $rebootRequired = $true
+        Write-Host "  [+] WSL package installed (Reboot will be required)." -ForegroundColor Green
+    } elseif ($wslInstall.ExitCode -eq 0) {
+        Write-Host "  [+] WSL package installed successfully." -ForegroundColor Green
+    } else {
+        Write-Host "  [*] Attempting WSL engine update..." -ForegroundColor Yellow
+        Start-Process wsl.exe -ArgumentList "--update" -NoNewWindow -Wait | Out-Null
+    }
+} else {
+    Write-Host "  [*] Ensuring WSL engine is up to date..." -ForegroundColor Yellow
+    Start-Process wsl.exe -ArgumentList "--update" -NoNewWindow -Wait | Out-Null
+    Write-Host "  [+] WSL Engine is up to date." -ForegroundColor Green
+}
 
 # 4. Install usbipd-win for Bluetooth physical redirection
 Write-Host ""
 Write-Host "[3/7] Checking usbipd-win installation (USB/IP redirection)..." -ForegroundColor Cyan
 $usbipdPath = "C:\Program Files\usbipd-win\usbipd.exe"
-if (-not (Test-Path $usbipdPath)) {
-    Write-Host "  [*] usbipd-win not detected. Starting silent installation..." -ForegroundColor Yellow
+$usbipdInPath = Get-Command "usbipd.exe" -ErrorAction SilentlyContinue
+
+if ((-not (Test-Path $usbipdPath)) -and (-not $usbipdInPath)) {
+    Write-Host "  [*] usbipd-win not detected. Preparing silent installation..." -ForegroundColor Yellow
     
     $localMsi = Join-Path $SourcePath "usbipd-win_4.3.0.msi"
     if (-not (Test-Path $localMsi)) {
         Write-Host "  [*] Downloading usbipd-win from GitHub official release..." -ForegroundColor Yellow
         $url = "https://github.com/dorssel/usbipd-win/releases/download/v4.3.0/usbipd-win_4.3.0.msi"
         try {
-            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-            Invoke-WebRequest -Uri $url -OutFile $localMsi -UseBasicParsing | Out-Null
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
+            Invoke-WebRequest -Uri $url -OutFile $localMsi -UseBasicParsing
             Write-Host "    [+] Download completed." -ForegroundColor Green
         } catch {
-            Write-Host "    [ERROR] Failed to download usbipd-win. Please check your internet connection: $_" -ForegroundColor Red
-            Write-Host "    Installation failed." -ForegroundColor Red
+            Write-Host "    [ERROR] Failed to download usbipd-win: $_" -ForegroundColor Red
+            Write-Host "    Please download usbipd-win manually from: $url" -ForegroundColor Yellow
+            Write-Host ""
             Read-Host "Press Enter to exit..."
             Exit
         }
@@ -82,9 +108,10 @@ if (-not (Test-Path $usbipdPath)) {
     if ($installProc.ExitCode -eq 0) {
         Write-Host "  [+] usbipd-win installed successfully." -ForegroundColor Green
     } elseif ($installProc.ExitCode -eq 3010) {
+        $rebootRequired = $true
         Write-Host "  [+] usbipd-win installed successfully (Reboot required)." -ForegroundColor Green
     } else {
-        Write-Host "  [!] Warning: usbipd installer reported exit code: $($installProc.ExitCode). Reboot might be required." -ForegroundColor Yellow
+        Write-Host "  [!] Warning: usbipd installer reported exit code: $($installProc.ExitCode)." -ForegroundColor Yellow
     }
 } else {
     Write-Host "  [+] usbipd-win is already present in the system." -ForegroundColor Green
@@ -94,7 +121,7 @@ if (-not (Test-Path $usbipdPath)) {
 Write-Host ""
 Write-Host "[4/7] Creating target production directories..." -ForegroundColor Cyan
 if (-not (Test-Path $InstallDir)) {
-    New-Item -ItemType Directory -Path $InstallDir | Out-Null
+    New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
 }
 $wslDir = Join-Path $InstallDir "WSL"
 $kernelDir = Join-Path $InstallDir "kernel"
@@ -107,32 +134,43 @@ Write-Host ""
 Write-Host "[5/7] Importing optimized Alpine Linux virtual machine..." -ForegroundColor Cyan
 $tarFile = Join-Path $SourcePath "alpine-rootfs.tar.gz"
 if (-not (Test-Path $tarFile)) {
-    Write-Host "  [ERROR] File 'alpine-rootfs.tar.gz' was not found in the installer directory." -ForegroundColor Red
+    Write-Host "  [ERROR] File 'alpine-rootfs.tar.gz' was not found in: $SourcePath" -ForegroundColor Red
     Write-Host "  Please ensure you extract the entire ZIP file before running install.ps1." -ForegroundColor Red
+    Write-Host ""
     Read-Host "Press Enter to exit..."
     Exit
 }
 
 # Shutdown any active instance for safety
-wsl.exe --shutdown | Out-Null
-$wslList = (wsl.exe -l -q | Out-String) -replace "`0", ""
+& wsl.exe --shutdown 2>$null | Out-Null
+$wslList = (& wsl.exe -l -q 2>$null | Out-String) -replace "`0", ""
 if ($wslList -match "Alpine") {
     Write-Host "  [*] Previous Alpine distribution detected. Registering clean instance..." -ForegroundColor Yellow
-    wsl.exe --unregister Alpine | Out-Null
+    & wsl.exe --unregister Alpine 2>$null | Out-Null
     Start-Sleep -Seconds 1
 }
 
 # Import distribution
-try {
-    wsl.exe --import Alpine $wslDir $tarFile --version 2 | Out-Null
+Write-Host "  [*] Importing Alpine rootfs into WSL2..." -ForegroundColor Yellow
+$importOutput = & wsl.exe --import Alpine "$wslDir" "$tarFile" --version 2 2>&1 | Out-String
+if ($LASTEXITCODE -eq 0) {
     Write-Host "  [+] Alpine VM imported successfully." -ForegroundColor Green
-} catch {
-    Write-Host "  [ERROR] Failed to import VM into WSL: $_" -ForegroundColor Red
+} else {
+    Write-Host "  [ERROR] Failed to import VM into WSL (Exit code $LASTEXITCODE)." -ForegroundColor Red
+    if (-not [string]::IsNullOrWhiteSpace($importOutput)) {
+        Write-Host "  WSL Message: $importOutput" -ForegroundColor Red
+    }
+    if ($rebootRequired) {
+        Write-Host ""
+        Write-Host "  [!] Virtualization features require a Windows reboot before WSL can import VMs." -ForegroundColor Yellow
+        Write-Host "      Please restart your computer and execute install.ps1 again." -ForegroundColor Yellow
+    }
+    Write-Host ""
     Read-Host "Press Enter to exit..."
     Exit
 }
 
-# 7. Configure Custom Kernel and optimal RAM Limit (300 MB)
+# 7. Configure Custom Kernel and optimal RAM Limit (320 MB)
 Write-Host ""
 Write-Host "[6/7] Configuring custom WSL audio Kernel and RAM limit..." -ForegroundColor Cyan
 $bzImageSource = Join-Path $SourcePath "bzImage"
@@ -147,23 +185,34 @@ if (Test-Path $bzImageSource) {
     Write-Host "  [!] Warning: 'bzImage' was not found in the local folder. The default Windows kernel will be used." -ForegroundColor Yellow
 }
 
-# Write global user .wslconfig using clean carriage-return injection
+# Write global user .wslconfig
 $wslconfigPath = Join-Path $env:USERPROFILE ".wslconfig"
 if ($hasCustomKernel) {
-    $wslconfigContent = "[wsl2]" + [char]13 + [char]10 + "kernel=C:\\LDAC_Audio\\kernel\\bzImage" + [char]13 + [char]10 + "memory=320MB" + [char]13 + [char]10 + "processors=4" + [char]13 + [char]10 + "guiApplications=false"
+    $wslconfigLines = @(
+        "[wsl2]",
+        "kernel=C:\\LDAC_Audio\\kernel\\bzImage",
+        "memory=320MB",
+        "processors=4",
+        "guiApplications=false"
+    )
 } else {
-    $wslconfigContent = "[wsl2]" + [char]13 + [char]10 + "memory=320MB" + [char]13 + [char]10 + "processors=4" + [char]13 + [char]10 + "guiApplications=false"
+    $wslconfigLines = @(
+        "[wsl2]",
+        "memory=320MB",
+        "processors=4",
+        "guiApplications=false"
+    )
 }
 
 try {
-    Set-Content -Path $wslconfigPath -Value $wslconfigContent -Force
+    [System.IO.File]::WriteAllLines($wslconfigPath, $wslconfigLines, [System.Text.Encoding]::UTF8)
     Write-Host "  [+] .wslconfig successfully set to optimal 320 MB RAM limit." -ForegroundColor Green
 } catch {
     Write-Host "  [!] Failed to write to ${wslconfigPath}: $_" -ForegroundColor Red
 }
 
 # Shutdown WSL to force load new settings
-wsl.exe --shutdown | Out-Null
+& wsl.exe --shutdown 2>$null | Out-Null
 
 # 8. Copy Windows support files
 Write-Host ""
@@ -180,22 +229,24 @@ $filesToCopy = @(
     "LDAC_LDAC_Audio.bat"
 )
 
+$copiedCount = 0
 foreach ($file in $filesToCopy) {
     $src = Join-Path $SourcePath $file
     $dst = Join-Path $InstallDir $file
     if (Test-Path $src) {
         Copy-Item $src $dst -Force | Out-Null
+        $copiedCount++
     }
 }
-Write-Host "  [+] Control files copied to $InstallDir." -ForegroundColor Green
+Write-Host "  [+] $copiedCount control files copied to $InstallDir." -ForegroundColor Green
 
 # 9. Create elegant shortcuts on the Desktop
 try {
     Write-Host "  [*] Creating Desktop shortcuts..." -ForegroundColor Yellow
     $WshShell = New-Object -ComObject WScript.Shell
-    
-    # Production Shortcut
-    $ShortcutProd = $WshShell.CreateShortcut([System.IO.Path]::Combine([Environment]::GetFolderPath("Desktop"), "LDAC Audio.lnk"))
+    $desktopDir = [Environment]::GetFolderPath("Desktop")
+    $shortcutPath = Join-Path $desktopDir "LDAC Audio.lnk"
+    $ShortcutProd = $WshShell.CreateShortcut($shortcutPath)
     
     $exePath = Join-Path $InstallDir "LDAC_Audio.exe"
     if (Test-Path $exePath) {
@@ -203,16 +254,16 @@ try {
         $ShortcutProd.IconLocation = "$exePath,0"
     } else {
         $ShortcutProd.TargetPath = Join-Path $InstallDir "LDAC_LDAC_Audio.bat"
-        $ShortcutProd.IconLocation = "shell32.dll,224" # Elegant audio icon
+        $ShortcutProd.IconLocation = "shell32.dll,224"
     }
     
     $ShortcutProd.WorkingDirectory = $InstallDir
     $ShortcutProd.Description = "Start wireless LDAC Audio transmission"
     $ShortcutProd.Save()
     
-    Write-Host "  [+] Desktop shortcuts created successfully." -ForegroundColor Green
+    Write-Host "  [+] Desktop shortcut created successfully." -ForegroundColor Green
 } catch {
-    Write-Host "  [!] Failed to create Desktop shortcuts automatically." -ForegroundColor Yellow
+    Write-Host "  [!] Failed to create Desktop shortcuts automatically: $_" -ForegroundColor Yellow
 }
 
 Write-Host ""
@@ -223,11 +274,15 @@ Write-Host " All components have been configured:" -ForegroundColor Gray
 Write-Host " - Alpine Linux VM imported under WSL2" -ForegroundColor Gray
 Write-Host " - Optimal 320 MB RAM limit configured in .wslconfig" -ForegroundColor Gray
 Write-Host " - usbipd-win installed for Bluetooth management" -ForegroundColor Gray
-Write-Host " - Desktop shortcuts created ('LDAC Audio')" -ForegroundColor Gray
+Write-Host " - Desktop shortcut created ('LDAC Audio')" -ForegroundColor Gray
 Write-Host "=====================================================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "[!] IMPORTANT: If this is the first time you set up WSL on this PC," -ForegroundColor Yellow
-Write-Host "    we highly recommend rebooting Windows before first use." -ForegroundColor Yellow
+if ($rebootRequired) {
+    Write-Host "[!] IMPORTANT: Virtualization features were newly enabled." -ForegroundColor Yellow
+    Write-Host "    Please restart Windows to complete the setup." -ForegroundColor Yellow
+} else {
+    Write-Host "[*] Setup is complete. You can start LDAC Audio from your Desktop." -ForegroundColor Green
+}
 Write-Host ""
 
-Read-Host "Press any key to exit..."
+Read-Host "Press Enter to exit..."
