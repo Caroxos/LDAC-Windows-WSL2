@@ -235,7 +235,7 @@ if ($LASTEXITCODE -ne 0) {
     Read-Host "Press Enter to exit..."
     Exit
 }
-$missing = & wsl.exe -d Alpine -u root -- sh -c "for b in bluetoothctl hciconfig pipewire wireplumber pactl pacat nc; do command -v `$b >/dev/null || echo `$b; done; ls /usr/lib/spa-0.2/bluez5/libspa-bluez5.so >/dev/null 2>&1 || echo libspa-bluez5" 2>&1 | Out-String
+$missing = & wsl.exe -d Alpine -u root -- sh -c "for b in bluetoothctl hciconfig pipewire wireplumber pactl pacat nc; do command -v `$b >/dev/null || echo `$b; done; ls /usr/lib/spa-0.2/bluez5/libspa-bluez5.so >/dev/null 2>&1 || echo libspa-bluez5; ls /usr/lib/spa-0.2/bluez5/libspa-codec-bluez5-ldac.so >/dev/null 2>&1 || echo libspa-codec-bluez5-ldac" 2>&1 | Out-String
 if (-not [string]::IsNullOrWhiteSpace($missing)) {
     Write-Host "  [ERROR] Still missing inside Alpine: $($missing.Trim() -replace '\s+', ', ')" -ForegroundColor Red
     Write-Host ""
