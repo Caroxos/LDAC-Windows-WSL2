@@ -1,4 +1,4 @@
-# ===========================================================================
+﻿# ===========================================================================
 #  LDAC Audio - PORTABLE DISTRIBUTION INSTALLER AND PROVISIONING SCRIPT (.ZIP)
 # ===========================================================================
 #  This script automates WSL2 enabling, silent installation of usbipd-win,
@@ -41,7 +41,7 @@ $rebootRequired = $false
 
 # 2. Enable Windows features for WSL2 & Virtual Machine Platform
 Write-Host ""
-Write-Host "[1/7] Enabling optional Windows features (WSL2 & Virtual Machine Platform)..." -ForegroundColor Cyan
+Write-Host "[1/8] Enabling optional Windows features (WSL2 & Virtual Machine Platform)..." -ForegroundColor Cyan
 try {
     $dism1 = Start-Process dism.exe -ArgumentList "/online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart" -NoNewWindow -Wait -PassThru
     if ($dism1.ExitCode -eq 3010) { $rebootRequired = $true }
@@ -56,7 +56,7 @@ try {
 
 # 3. Ensure WSL is installed and updated
 Write-Host ""
-Write-Host "[2/7] Checking and updating WSL subsystem..." -ForegroundColor Cyan
+Write-Host "[2/8] Checking and updating WSL subsystem..." -ForegroundColor Cyan
 $wslStatus = & wsl.exe --status 2>&1 | Out-String
 if ($LASTEXITCODE -ne 0 -or $wslStatus -match "not installed") {
     Write-Host "  [*] WSL base package not detected. Installing WSL..." -ForegroundColor Yellow
@@ -78,7 +78,7 @@ if ($LASTEXITCODE -ne 0 -or $wslStatus -match "not installed") {
 
 # 4. Install usbipd-win for Bluetooth physical redirection
 Write-Host ""
-Write-Host "[3/7] Checking usbipd-win installation (USB/IP redirection)..." -ForegroundColor Cyan
+Write-Host "[3/8] Checking usbipd-win installation (USB/IP redirection)..." -ForegroundColor Cyan
 $usbipdPath = "C:\Program Files\usbipd-win\usbipd.exe"
 $usbipdInPath = Get-Command "usbipd.exe" -ErrorAction SilentlyContinue
 
@@ -119,7 +119,7 @@ if ((-not (Test-Path $usbipdPath)) -and (-not $usbipdInPath)) {
 
 # 5. Create Target Directory
 Write-Host ""
-Write-Host "[4/7] Creating target production directories..." -ForegroundColor Cyan
+Write-Host "[4/8] Creating target production directories..." -ForegroundColor Cyan
 if (-not (Test-Path $InstallDir)) {
     New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
 }
@@ -131,7 +131,7 @@ Write-Host "  [+] Directory structure created at $InstallDir." -ForegroundColor 
 
 # 6. Import optimized Alpine VM
 Write-Host ""
-Write-Host "[5/7] Importing optimized Alpine Linux virtual machine..." -ForegroundColor Cyan
+Write-Host "[5/8] Importing optimized Alpine Linux virtual machine..." -ForegroundColor Cyan
 $tarFile = Join-Path $SourcePath "alpine-rootfs.tar.gz"
 if (-not (Test-Path $tarFile)) {
     Write-Host "  [ERROR] File 'alpine-rootfs.tar.gz' was not found in: $SourcePath" -ForegroundColor Red
@@ -170,9 +170,9 @@ if ($LASTEXITCODE -eq 0) {
     Exit
 }
 
-# 7. Configure Custom Kernel and optimal RAM Limit (320 MB)
+# 6b. Configure Custom Kernel and RAM limit (512 MB)
 Write-Host ""
-Write-Host "[6/7] Configuring custom WSL audio Kernel and RAM limit..." -ForegroundColor Cyan
+Write-Host "[6/8] Configuring custom WSL audio Kernel and RAM limit..." -ForegroundColor Cyan
 $bzImageSource = Join-Path $SourcePath "bzImage"
 $bzImageDest = Join-Path $kernelDir "bzImage"
 
@@ -185,28 +185,34 @@ if (Test-Path $bzImageSource) {
     Write-Host "  [!] Warning: 'bzImage' was not found in the local folder. The default Windows kernel will be used." -ForegroundColor Yellow
 }
 
-# Write global user .wslconfig
-$wslconfigPath = Join-Path $env:USERPROFILE ".wslconfig"
-if ($hasCustomKernel) {
-    $wslconfigLines = @(
-        "[wsl2]",
-        "kernel=C:\\LDAC_Audio\\kernel\\bzImage",
-        "memory=320MB",
-        "processors=4",
-        "guiApplications=false"
-    )
-} else {
-    $wslconfigLines = @(
-        "[wsl2]",
-        "memory=320MB",
-        "processors=4",
-        "guiApplications=false"
-    )
+# The kernel set in .wslconfig applies to EVERY WSL2 distribution, not only Alpine
+$otherDistros = ((& wsl.exe -l -q 2>$null | Out-String) -replace "`0", "") -split "`r?`n" |
+    ForEach-Object { $_.Trim() } | Where-Object { $_ -and $_ -ne "Alpine" }
+if ($hasCustomKernel -and $otherDistros) {
+    Write-Host "  [!] Note: the LDAC kernel will also be used by your other WSL distributions: $($otherDistros -join ', ')." -ForegroundColor Yellow
+    Write-Host "      It is a lean kernel without loadable modules. uninstall.ps1 restores the default one." -ForegroundColor Yellow
 }
 
+# Write global user .wslconfig
+# 512 MB: with 320 MB the kernel hit page-allocation failures (order-7) opening VMBus channels
+# while USB/IP, Bluetooth and PipeWire run together. It is a cap, not reserved memory.
+$wslconfigPath = Join-Path $env:USERPROFILE ".wslconfig"
+# Keep a copy of a previous configuration instead of silently overwriting it
+if ((Test-Path $wslconfigPath) -and -not (Test-Path "$wslconfigPath.ldac-backup")) {
+    Copy-Item $wslconfigPath "$wslconfigPath.ldac-backup" -Force
+    Write-Host "  [*] Previous .wslconfig saved as .wslconfig.ldac-backup" -ForegroundColor Yellow
+}
+$wslconfigLines = @("[wsl2]")
+if ($hasCustomKernel) { $wslconfigLines += "kernel=C:\\LDAC_Audio\\kernel\\bzImage" }
+$wslconfigLines += @(
+    "memory=512MB",
+    "processors=4",
+    "guiApplications=false"
+)
+
 try {
-    [System.IO.File]::WriteAllLines($wslconfigPath, $wslconfigLines, [System.Text.Encoding]::UTF8)
-    Write-Host "  [+] .wslconfig successfully set to optimal 320 MB RAM limit." -ForegroundColor Green
+    [System.IO.File]::WriteAllLines($wslconfigPath, $wslconfigLines, (New-Object System.Text.UTF8Encoding $false))
+    Write-Host "  [+] .wslconfig set (512 MB RAM limit)." -ForegroundColor Green
 } catch {
     Write-Host "  [!] Failed to write to ${wslconfigPath}: $_" -ForegroundColor Red
 }
@@ -214,9 +220,49 @@ try {
 # Shutdown WSL to force load new settings
 & wsl.exe --shutdown 2>$null | Out-Null
 
+# 7. Install Bluetooth and audio packages inside Alpine.
+# The rootfs is a plain Alpine minirootfs: without this step there is no bluetoothd,
+# bluetoothctl, PipeWire or LDAC plugin, and no headphones can ever be found.
+Write-Host ""
+Write-Host "[7/8] Installing Bluetooth and audio packages inside Alpine (needs Internet)..." -ForegroundColor Cyan
+$packages = "bluez bluez-deprecated dbus pipewire pipewire-pulse pipewire-spa-bluez wireplumber pulseaudio-utils netcat-openbsd"
+$apkOutput = & wsl.exe -d Alpine -u root -- sh -c "apk update && apk add --no-cache $packages" 2>&1 | Out-String
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "  [ERROR] Could not install the packages inside Alpine (exit code $LASTEXITCODE)." -ForegroundColor Red
+    Write-Host $apkOutput -ForegroundColor Red
+    Write-Host "  Check the Internet connection and run install.ps1 again." -ForegroundColor Yellow
+    Write-Host ""
+    Read-Host "Press Enter to exit..."
+    Exit
+}
+$missing = & wsl.exe -d Alpine -u root -- sh -c "for b in bluetoothctl hciconfig pipewire wireplumber pactl pacat nc; do command -v `$b >/dev/null || echo `$b; done; ls /usr/lib/spa-0.2/bluez5/libspa-bluez5.so >/dev/null 2>&1 || echo libspa-bluez5" 2>&1 | Out-String
+if (-not [string]::IsNullOrWhiteSpace($missing)) {
+    Write-Host "  [ERROR] Still missing inside Alpine: $($missing.Trim() -replace '\s+', ', ')" -ForegroundColor Red
+    Write-Host ""
+    Read-Host "Press Enter to exit..."
+    Exit
+}
+Write-Host "  [+] BlueZ, PipeWire, WirePlumber and the LDAC Bluetooth plugin installed." -ForegroundColor Green
+
+# Receiver script inside Alpine (LF line endings); the app also refreshes it on every start
+$receptorSrc = Join-Path $SourcePath "receptor_audio.sh"
+if (Test-Path $receptorSrc) {
+    $receptor = ([System.IO.File]::ReadAllText($receptorSrc)) -replace "`r`n", "`n"
+    $tmp = Join-Path $env:TEMP "receptor_audio.sh"
+    [System.IO.File]::WriteAllText($tmp, $receptor, (New-Object System.Text.UTF8Encoding $false))
+    Get-Content $tmp -Raw | & wsl.exe -d Alpine -u root -- sh -c "tr -d '\r' > /root/receptor_audio.sh && chmod +x /root/receptor_audio.sh"
+    Remove-Item $tmp -Force -ErrorAction SilentlyContinue
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "  [+] receptor_audio.sh installed in /root inside Alpine." -ForegroundColor Green
+    } else {
+        Write-Host "  [!] Could not copy receptor_audio.sh into Alpine; the app will retry on start." -ForegroundColor Yellow
+    }
+}
+& wsl.exe --shutdown 2>$null | Out-Null
+
 # 8. Copy Windows support files
 Write-Host ""
-Write-Host "[7/7] Copying control scripts and Windows frontend..." -ForegroundColor Cyan
+Write-Host "[8/8] Copying control scripts and Windows frontend..." -ForegroundColor Cyan
 $filesToCopy = @(
     "LDAC_Audio.exe",
     "ldac_paths.json",
@@ -272,7 +318,8 @@ Write-Host "                INSTALLATION COMPLETED SUCCESSFULLY!" -ForegroundCol
 Write-Host "=====================================================================" -ForegroundColor Green
 Write-Host " All components have been configured:" -ForegroundColor Gray
 Write-Host " - Alpine Linux VM imported under WSL2" -ForegroundColor Gray
-Write-Host " - Optimal 320 MB RAM limit configured in .wslconfig" -ForegroundColor Gray
+Write-Host " - 512 MB RAM limit configured in .wslconfig" -ForegroundColor Gray
+Write-Host " - Bluetooth/audio packages and receptor_audio.sh installed in Alpine" -ForegroundColor Gray
 Write-Host " - usbipd-win installed for Bluetooth management" -ForegroundColor Gray
 Write-Host " - Desktop shortcut created ('LDAC Audio')" -ForegroundColor Gray
 Write-Host "=====================================================================" -ForegroundColor Green

@@ -25,7 +25,7 @@ A **100% free**, open-source alternative to commercial A2DP Bluetooth drivers ($
   └──────────────────────┬───────────────────────────────────┘
                          │ (WSL2 Internal Virtual Network)
                          ▼
-             WSL2 GUEST (Alpine Linux VM - 300MB RAM Limit)
+             WSL2 GUEST (Alpine Linux VM - 512MB RAM Limit)
   ┌──────────────────────────────────────────────────────────┐
   │  receptor_audio.sh (Listens on UDP Port)                 │
   │                      │                                   │
@@ -58,7 +58,7 @@ A **100% free**, open-source alternative to commercial A2DP Bluetooth drivers ($
   * 🟡 **Stable Mode (660 kbps)**: Standard LDAC quality for high-interference environments (dense 2.4GHz/Wi-Fi zones).
   * 🔵 **Adaptive Mode (Auto)**: Dynamically scales quality matching signal capabilities.
 * **Master Volume Integration**: Employs `PyCaw` to monitor Windows master volume changes and scales loopback audio digitally in C-speed (`audioop`) with zero latency.
-* **Ultra-Lightweight Footprint**: Custom-engineered minimal Alpine Linux VM running on only **300 MB of allocated RAM** and ~234 MB disc space. *(Note: This RAM limit is the absolute minimum possible and cannot be decreased any further due to WSL2 fixed hypervisor overhead, such as network virtualization bridges and filesystem sharing).*
+* **Ultra-Lightweight Footprint**: Minimal Alpine Linux VM capped at **512 MB of RAM** (a limit, not reserved memory). *(Note: 320 MB caused kernel page-allocation failures while USB/IP, Bluetooth and PipeWire ran together, so the cap was raised in v1.0.3).*
 * **Automated USB Redirection**: Integrates `usbipd-win` to dynamically discover physical PCIe/USB Bluetooth hardware and share it automatically with WSL2.
 * **Dynamic GUI Tray Application**: Keep track of the connection state, select audio profiles, and monitor real-time stream status (UDP bitrate, active headset descriptions, active codec) through a beautiful dark/cyan Windows system tray widget.
 
@@ -86,8 +86,9 @@ The automated installer will:
 2. Install or update the WSL virtual engine.
 3. Install `usbipd-win` silently (offline installer included).
 4. Extract the ultra-optimized Alpine Linux environment to `C:\LDAC_Audio`.
-5. Write the correct RAM policies (.wslconfig) and custom audio Bluetooth kernels.
-6. Place a desktop shortcut for the production environment.
+5. Write the correct RAM policies (.wslconfig) and the custom audio Bluetooth kernel (USB/IP and Bluetooth built in; recipe in `kernel/`). A previous `.wslconfig` is kept as `.wslconfig.ldac-backup`.
+6. Install BlueZ, PipeWire, WirePlumber and the LDAC Bluetooth plugin inside Alpine (requires Internet), and copy `receptor_audio.sh` into it.
+7. Place a desktop shortcut for the production environment.
 
 ### Step 3: Run the Application
 Double-click the **`LDAC_Audio.exe`** shortcut on your desktop (or in your installation folder).

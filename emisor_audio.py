@@ -160,8 +160,10 @@ def main():
                 pass
             return (in_data, pyaudio.paContinue)
 
-        # Abrir el stream de WASAPI Loopback (preferir 48000 Hz estéreo para coincidir con el receptor pacat)
-        rate = 48000
+        # Abrir el stream de WASAPI Loopback en el formato nativo de la salida (sin remuestreo:
+        # el loopback compartido de WASAPI solo entrega ese formato). El receptor pacat se
+        # arranca después con la frecuencia que se publique aquí.
+        rate = native_rate
         channels = 2
         try:
             stream = p.open(format=pyaudio.paInt16,
@@ -172,8 +174,8 @@ def main():
                             frames_per_buffer=CHUNK,
                             stream_callback=callback)
         except Exception:
-            # Si el hardware exige exclusivamente su formato nativo, hacer fallback
-            rate = native_rate
+            # Último recurso: 48 kHz
+            rate = 48000
             channels = min(native_channels, 2)
             stream = p.open(format=pyaudio.paInt16,
                             channels=channels,
@@ -184,6 +186,17 @@ def main():
                             stream_callback=callback)
 
         print(f"[INFO] Audio stream active: {rate} Hz, {channels} channels, 16-bit format")
+
+        # Publicar el formato de inmediato: la app arranca el receptor (pacat) con esta misma
+        # frecuencia; si no coinciden, el audio suena acelerado o lento
+        try:
+            temp_fd, temp_path = tempfile.mkstemp(dir=os.path.dirname(STATS_FILE), prefix="ldac_stats_tmp")
+            with os.fdopen(temp_fd, "w") as f:
+                json.dump({"udp_kbps": 0, "volume": int(volume_state[0] * 100), "rate": rate,
+                           "channels": channels, "timestamp": time.time()}, f)
+            os.replace(temp_path, STATS_FILE)
+        except Exception:
+            pass
 
         print(f"[OK] Streaming audio in real-time to {wsl_ip}:{UDP_PORT}...")
         print("Press Ctrl+C to stop the emitter.")

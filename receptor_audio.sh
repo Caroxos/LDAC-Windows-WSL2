@@ -6,8 +6,30 @@ LDAC_MODE=${2:-"hq"}
 SAMPLE_RATE=${3:-"48000"}
 CHANNELS=${4:-"2"}
 
-# Verify if the system is already up, headphones are connected, and the active quality config matches the requested mode
-if pgrep pipewire >/dev/null 2>&1 && pgrep wireplumber >/dev/null 2>&1 && pactl info >/dev/null 2>&1 && bluetoothctl info "$MAC_ADDRESS" 2>/dev/null | grep -q "Connected: yes" && [ -f /etc/wireplumber/wireplumber.conf.d/10-bluez.conf ] && grep -q "quality = \"$LDAC_MODE\"" /etc/wireplumber/wireplumber.conf.d/10-bluez.conf; then
+# PipeWire/pactl need these in BOTH paths (the fast path used to run pactl without them,
+# so it could never reach the server: "Connection refused")
+export XDG_RUNTIME_DIR=/tmp/runtime-root
+export PULSE_SERVER=unix:/tmp/runtime-root/pulse/native
+
+# LDAC rate = capture rate when LDAC supports it (no resampling); otherwise 96 kHz.
+# Without an explicit rate WirePlumber negotiates 44.1 kHz even on 96 kHz-capable headphones.
+case "$SAMPLE_RATE" in
+    44100|48000|88200|96000) LDAC_RATE=$SAMPLE_RATE ;;
+    *) LDAC_RATE=96000 ;;
+esac
+BLUEZ_CONF=/etc/wireplumber/wireplumber.conf.d/10-bluez.conf
+
+# Wait until pipewire-pulse actually accepts clients (the socket file appears earlier)
+wait_for_pulse() {
+    for i in $(seq 1 30); do
+        pactl info >/dev/null 2>&1 && return 0
+        sleep 0.5
+    done
+    return 1
+}
+
+# Verify if the system is already up, headphones are connected, and the active quality and rate config match the request
+if pgrep pipewire >/dev/null 2>&1 && pgrep wireplumber >/dev/null 2>&1 && pactl info >/dev/null 2>&1 && bluetoothctl info "$MAC_ADDRESS" 2>/dev/null | grep -q "Connected: yes" && [ -f "$BLUEZ_CONF" ] && grep -q "quality = \"$LDAC_MODE\"" "$BLUEZ_CONF" && grep -q "bluez5.default.rate = $LDAC_RATE" "$BLUEZ_CONF"; then
     echo "Active servers and headphones already connected. Directing audio stream directly..."
     
     # Clean possible network zombies before binding to port 5005
@@ -54,8 +76,6 @@ mkdir -p /run/dbus
 pgrep bluetoothd >/dev/null || setsid /usr/lib/bluetooth/bluetoothd >/dev/null 2>&1 &
 
 # Start PipeWire and PipeWire-Pulse in the background
-export XDG_RUNTIME_DIR=/tmp/runtime-root
-export PULSE_SERVER=unix:/tmp/runtime-root/pulse/native
 mkdir -p $XDG_RUNTIME_DIR
 chmod 700 $XDG_RUNTIME_DIR
 
@@ -66,8 +86,13 @@ LDAC_MODE=${2:-"hq"}
 rm -f /root/.config/wireplumber/wireplumber.conf.d/10-bluez.conf 2>/dev/null
 
 # Use /etc/wireplumber which is the system path, ensuring it works regardless of the $HOME variable
+# (the rate lives in this same heredoc so a full reconfigure never drops it)
 mkdir -p /etc/wireplumber/wireplumber.conf.d
-cat <<EOF > /etc/wireplumber/wireplumber.conf.d/10-bluez.conf
+cat <<EOF > "$BLUEZ_CONF"
+monitor.bluez.properties = {
+  bluez5.default.rate = $LDAC_RATE
+  bluez5.default.channels = 2
+}
 monitor.bluez.rules = [
   {
     matches = [
@@ -96,7 +121,7 @@ for i in $(seq 1 20); do
     sleep 0.5
 done
 
-if [ ! -S "$SOCKET_PATH" ]; then
+if [ ! -S "$SOCKET_PATH" ] || ! wait_for_pulse; then
     echo "[ERROR] The audio server could not be started in time."
     exit 1
 fi

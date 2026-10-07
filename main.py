@@ -28,7 +28,9 @@ from sys_helpers import (
     _startupinfo,
     check_single_instance,
     cleanup_pid_file,
-    resolve_usbipd_path
+    resolve_usbipd_path,
+    kill_process_tree,
+    kill_stale_emitters
 )
 from logger import log_message, run_logged, WSL_DISTRO, WSL_USER
 from wsl_manager import get_dynamic_busid, USBIPD
@@ -182,18 +184,9 @@ def sleep_sentinel_loop():
                 ctx.state = STATE_STOPPED
                 ctx.stop_event.set()
                 
-                try:
-                    if ctx.python_proc and ctx.python_proc.poll() is None:
-                        ctx.python_proc.kill()
-                except Exception:
-                    pass
+                kill_process_tree(ctx.python_proc)
                 ctx.python_proc = None
-                
-                try:
-                    if ctx.wsl_proc and ctx.wsl_proc.poll() is None:
-                        ctx.wsl_proc.kill()
-                except Exception:
-                    pass
+                kill_process_tree(ctx.wsl_proc)
                 ctx.wsl_proc = None
                 
                 get_dynamic_busid(ctx)
@@ -228,6 +221,7 @@ def main():
     # Limpieza preventiva en segundo plano (arranque en frío)
     def cold_start_cleanup():
         # Limpieza de subsistemas al arranque (arranque en frío) conservando perfiles configurados
+        kill_stale_emitters()
         get_dynamic_busid(ctx)
         try:
             run_logged([USBIPD, "detach", "--busid", ctx.BUSID], creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=3)

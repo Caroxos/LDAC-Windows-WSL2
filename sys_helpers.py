@@ -4,6 +4,7 @@ import ctypes
 import shutil
 import tempfile
 import re
+import time
 import tkinter as tk
 import subprocess
 from logger import log_message
@@ -44,25 +45,45 @@ try:
     kernel32 = ctypes.windll.kernel32
     h_job = kernel32.CreateJobObjectW(None, None)
     if h_job:
+        # Layout real de Windows: LimitFlags va después de los dos LARGE_INTEGER de tiempo.
+        # (Antes estaba en el offset 0, así que KILL_ON_JOB_CLOSE nunca quedaba activo y los
+        # procesos --emisor sobrevivían al cerrar la app.)
         class JOBOBJECT_BASIC_LIMIT_INFORMATION(ctypes.Structure):
             _fields_ = [
+                ('PerProcessUserTimeLimit', ctypes.c_int64),
+                ('PerJobUserTimeLimit', ctypes.c_int64),
                 ('LimitFlags', wintypes.DWORD),
-                ('Padding', ctypes.c_byte * 44)
+                ('MinimumWorkingSetSize', ctypes.c_size_t),
+                ('MaximumWorkingSetSize', ctypes.c_size_t),
+                ('ActiveProcessLimit', wintypes.DWORD),
+                ('Affinity', ctypes.c_size_t),
+                ('PriorityClass', wintypes.DWORD),
+                ('SchedulingClass', wintypes.DWORD),
             ]
+        class IO_COUNTERS(ctypes.Structure):
+            _fields_ = [(name, ctypes.c_uint64) for name in (
+                'ReadOperationCount', 'WriteOperationCount', 'OtherOperationCount',
+                'ReadTransferCount', 'WriteTransferCount', 'OtherTransferCount')]
         class JOBOBJECT_EXTENDED_LIMIT_INFORMATION(ctypes.Structure):
             _fields_ = [
                 ('BasicLimitInformation', JOBOBJECT_BASIC_LIMIT_INFORMATION),
-                ('PaddingExtended', ctypes.c_byte * 96)
+                ('IoInfo', IO_COUNTERS),
+                ('ProcessMemoryLimit', ctypes.c_size_t),
+                ('JobMemoryLimit', ctypes.c_size_t),
+                ('PeakProcessMemoryUsed', ctypes.c_size_t),
+                ('PeakJobMemoryUsed', ctypes.c_size_t),
             ]
         
         limit = JOBOBJECT_EXTENDED_LIMIT_INFORMATION()
         limit.BasicLimitInformation.LimitFlags = 0x2000 # JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
         
-        kernel32.SetInformationJobObject(
+        if not kernel32.SetInformationJobObject(
             h_job, 9, # JobObjectExtendedLimitInformation
             ctypes.byref(limit),
             ctypes.sizeof(limit)
-        )
+        ):
+            log_message(f"SetInformationJobObject failed (error {kernel32.GetLastError()})")
+            h_job = None
 except Exception:
     h_job = None
 
@@ -125,6 +146,50 @@ def is_pid_running(pid):
             return str(pid) in stdout_str and any(kw in stdout_str for kw in ["python", "ldac_tray"])
         except Exception:
             return False
+
+def kill_process_tree(proc):
+    """Termina un subproceso y todos sus descendientes.
+
+    En el ejecutable empaquetado (PyInstaller onefile) cada `LDAC_Audio.exe --emisor` es un
+    cargador que lanza un segundo proceso con el Python real: terminate() solo mata al
+    cargador y el emisor que captura el audio quedaba vivo.
+    """
+    if not proc or proc.poll() is not None:
+        return
+    try:
+        subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                       capture_output=True, creationflags=CREATE_NO_WINDOW,
+                       startupinfo=_startupinfo(), timeout=5)
+    except Exception:
+        pass
+    try:
+        proc.kill()
+    except Exception:
+        pass
+
+def kill_stale_emitters():
+    """Mata emisores (--emisor) que hayan quedado de sesiones anteriores.
+
+    Varios emisores capturando el mismo loopback se pisan entre sí y no llega audio.
+    """
+    own = os.getpid()
+    script = (
+        "Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -ne " + str(own) + " -and ("
+        "($_.Name -like 'LDAC_Audio*' -and $_.CommandLine -match '--emisor') -or "
+        "$_.CommandLine -match 'emisor_audio\\.py') } | ForEach-Object { $_.ProcessId }"
+    )
+    try:
+        res = subprocess.run(["powershell.exe", "-NoProfile", "-Command", script],
+                             capture_output=True, creationflags=CREATE_NO_WINDOW,
+                             startupinfo=_startupinfo(), timeout=15)
+        pids = [int(p) for p in res.stdout.decode("utf-8", errors="replace").split() if p.isdigit()]
+        for pid in pids:
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)], capture_output=True,
+                           creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=5)
+        if pids:
+            log_message(f"Killed {len(pids)} stale emitter process(es): {pids}")
+    except Exception as e:
+        log_message(f"kill_stale_emitters error: {e}")
 
 def kill_pid(pid):
     """Termina de forma forzada un proceso por su PID."""

@@ -169,12 +169,12 @@ def ensure_bluetooth_active(ctx, progress_callback=None):
     time.sleep(1)
 
     # Mantener viva la VM durante todo el attach
-    boot_proc = popen_logged(["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "sleep", "30"], creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo())
+    boot_proc = popen_logged(["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "sleep", "60"], creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo())
     time.sleep(1)
 
     log("Attaching Bluetooth adapter to WSL2...")
     try:
-        run_logged([USBIPD, "attach", "--wsl", WSL_DISTRO, "--busid", ctx.BUSID], creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=20)
+        run_logged([USBIPD, "attach", "--wsl", WSL_DISTRO, "--busid", ctx.BUSID], creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=45)
     except Exception:
         log("Attach timed out, checking if hci0 appeared anyway...")
 

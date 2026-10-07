@@ -14,6 +14,25 @@ Este documento detalla los problemas identificados y corregidos en el proyecto *
 | **BUG-04** | `emisor_audio.py` / `receptor_audio.sh` | **Alta** | Desincronización de frecuencia de muestreo (44.1kHz vs 48kHz) causando distorsión de tono/velocidad ("efecto ardilla"). | **Resuelto** |
 | **BUG-05** | `stream_manager.py` | **Media** | Inyección de scripts con retornos de carro Windows (`\r\n`) provocando fallos de sintaxis en Alpine Linux (`/bin/ash`). | **Resuelto** |
 | **BUG-06** | `emisor_audio.py` | **Media** | Incompatibilidad con Python 3.13+ debido a la eliminación de `audioop` (PEP 594). | **Resuelto** |
+| **BUG-07** | `bzImage` | **Crítica** | El kernel traía USB, USB/IP (`vhci_hcd`) y `btusb` como módulos, pero el rootfs no incluye `/lib/modules`: `usbipd attach` fallaba con `Loading vhci_hcd failed` (#5, #6). | **Resuelto** |
+| **BUG-08** | `install.ps1` | **Crítica** | El rootfs es un minirootfs de Alpine sin `bluez`, `pipewire-spa-bluez`, `wireplumber`, `pactl` ni `nc`: no aparecía ningún dispositivo y fallaba con `br-connection-profile-unavailable` (#5, #6). | **Resuelto** |
+| **BUG-09** | `sys_helpers.py` | **Alta** | Estructura del Job Object con `LimitFlags` en el offset equivocado: `KILL_ON_JOB_CLOSE` nunca se activaba y los `--emisor` quedaban huérfanos y se pisaban (#6). | **Resuelto** |
+| **BUG-10** | `stream_manager.py` / `main.py` | **Alta** | `terminate()` solo mataba el cargador de PyInstaller; el emisor real seguía capturando. | **Resuelto** |
+| **BUG-11** | `stream_manager.py` | **Alta** | `receptor_audio.sh` solo se copiaba a Alpine en el arranque en frío y los errores se ignoraban (#6). | **Resuelto** |
+| **BUG-12** | `stream_manager.py` / `emisor_audio.py` | **Alta** | Si la salida de Windows no era de 48 kHz, el emisor caía a la frecuencia nativa pero el receptor seguía a 48 kHz (audio acelerado o lento). | **Resuelto** |
+| **BUG-13** | `receptor_audio.sh` | **Media** | El camino rápido llamaba a `pactl` sin `PULSE_SERVER` (`Connection refused`) y no se esperaba a que pipewire-pulse aceptara clientes (#6). | **Resuelto** |
+| **BUG-14** | `receptor_audio.sh` | **Media** | WirePlumber negociaba LDAC a 44,1 kHz; la frecuencia ahora va en el mismo heredoc, así que una reconfiguración no la borra (#6). | **Resuelto** |
+| **BUG-15** | `stream_manager.py` / `wsl_manager.py` | **Media** | `usbipd attach` con timeout de 20 s abortaba la sesión aunque el adaptador terminara de conectarse (#6). | **Resuelto** |
+| **BUG-16** | `install.ps1` | **Media** | Límite de 320 MB en `.wslconfig` provocaba fallos de asignación de páginas del kernel; ahora 512 MB, y el `.wslconfig` previo se respalda (#6). | **Resuelto** |
+
+---
+
+## v1.0.3 — Notas
+
+* **Kernel**: `bzImage` ahora es un kernel 6.6.114.1 con USB, USB/IP y Bluetooth (Intel, Realtek, MediaTek, Broadcom) compilados dentro, sin módulos. La receta y la configuración están en `kernel/`. Ojo: `.wslconfig` aplica el kernel a todas las distribuciones WSL2; el instalador avisa si hay otras y `uninstall.ps1` lo revierte.
+* **Paquetes**: el instalador instala dentro de Alpine `bluez bluez-deprecated dbus pipewire pipewire-pulse pipewire-spa-bluez wireplumber pulseaudio-utils netcat-openbsd` y verifica que estén los binarios y el plugin LDAC. Requiere Internet.
+* **Orden de arranque**: primero arranca el emisor, que publica la frecuencia y canales con que abrió la captura (la nativa de la salida de Windows), y después el receptor `pacat` con esos mismos valores.
+* **Procesos**: al iniciar la app y cada sesión se eliminan emisores huérfanos de sesiones anteriores; al detener se mata el árbol completo del emisor.
 
 ---
 
