@@ -160,7 +160,7 @@ def run_scan_bg(ctx, status_var, listbox, btn_scan, btn_connect, btn_disconnect=
         safe_gui_call(listbox, lambda: status_var.set("Starting Bluetooth adapter..."))
         bt_ok = ensure_bluetooth_active(ctx, lambda msg: safe_gui_call(listbox, lambda: status_var.set(msg)))
         if not bt_ok:
-            safe_gui_call(listbox, lambda: status_var.set("Could not start Bluetooth adapter. Verify USB dongle."))
+            safe_gui_call(listbox, lambda: status_var.set("Could not start Bluetooth adapter. Details in the logs folder."))
             return
 
         safe_gui_call(listbox, lambda: status_var.set("Verifying adapter is powered on..."))

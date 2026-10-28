@@ -76,6 +76,26 @@ def ensure_device_bound(ctx):
     except Exception as e:
         log_message(f"ensure_device_bound error: {str(e)}")
 
+def log_adapter_diagnostics():
+    """Vuelca al log de sesión lo necesario para saber por qué el adaptador no quedó listo:
+    kernel, mensajes del kernel sobre USB/IP y Bluetooth (firmware incluido) y estado de usbipd."""
+    diag = (
+        "echo \"kernel: $(uname -r)\"; "
+        "echo \"hci: $(ls /sys/class/bluetooth 2>/dev/null)\"; "
+        "ls /lib/firmware/rtl_bt >/dev/null 2>&1 && echo 'rtl_bt firmware: present' || echo 'rtl_bt firmware: MISSING'; "
+        "dmesg 2>/dev/null | grep -iE 'bluetooth|btusb|btrtl|btintel|rtl|vhci|usbip|firmware' | tail -40; "
+        "hciconfig -a 2>/dev/null | head -12"
+    )
+    try:
+        run_logged(["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "ash", "-c", diag],
+                   creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=15)
+    except Exception as e:
+        log_message(f"Adapter diagnostics failed: {e}")
+    try:
+        run_logged([USBIPD, "list"], creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=10)
+    except Exception:
+        pass
+
 def ensure_bluetooth_active(ctx, progress_callback=None):
     """Garantiza que el adaptador Bluetooth esté acoplado en WSL y bluetoothd esté corriendo."""
     get_dynamic_busid(ctx)
@@ -201,6 +221,7 @@ def ensure_bluetooth_active(ctx, progress_callback=None):
 
     if not hci0_found:
         log("Error: Bluetooth adapter (hci0) not detected. Check your USB dongle.")
+        log_adapter_diagnostics()
         return False
 
     log("Starting D-Bus and bluetoothd in Alpine...")
@@ -209,6 +230,14 @@ def ensure_bluetooth_active(ctx, progress_callback=None):
             ["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "ash", "-c", startup_cmd],
             creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=20
         )
+        powered = run_logged(
+            ["wsl", "-d", WSL_DISTRO, "-u", WSL_USER, "ash", "-c", "bluetoothctl show 2>/dev/null | grep -q 'Powered: yes'"],
+            creationflags=CREATE_NO_WINDOW, startupinfo=_startupinfo(), timeout=10
+        )
+        if powered.returncode != 0:
+            # hci0 existe pero el controlador no enciende: típico de un Realtek sin su firmware
+            log("Warning: the Bluetooth adapter is attached but did not power on.")
+            log_adapter_diagnostics()
     except Exception:
         pass
     log("Bluetooth ready for scanning/connection.")

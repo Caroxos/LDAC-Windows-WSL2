@@ -225,7 +225,9 @@ try {
 # bluetoothctl, PipeWire or LDAC plugin, and no headphones can ever be found.
 Write-Host ""
 Write-Host "[7/8] Installing Bluetooth and audio packages inside Alpine (needs Internet)..." -ForegroundColor Cyan
-$packages = "bluez bluez-deprecated dbus pipewire pipewire-pulse pipewire-spa-bluez wireplumber pulseaudio-utils netcat-openbsd"
+# linux-firmware-rtl_bt: Realtek dongles (RTL8761B, etc.) need their firmware loaded by Linux
+# again after USB/IP attaches them; without it the controller resets and never powers on.
+$packages = "bluez bluez-deprecated dbus pipewire pipewire-pulse pipewire-spa-bluez wireplumber pulseaudio-utils netcat-openbsd linux-firmware-rtl_bt"
 $apkOutput = & wsl.exe -d Alpine -u root -- sh -c "apk update && apk add --no-cache $packages" 2>&1 | Out-String
 if ($LASTEXITCODE -ne 0) {
     Write-Host "  [ERROR] Could not install the packages inside Alpine (exit code $LASTEXITCODE)." -ForegroundColor Red

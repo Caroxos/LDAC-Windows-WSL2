@@ -23,6 +23,8 @@ Este documento detalla los problemas identificados y corregidos en el proyecto *
 | **BUG-13** | `receptor_audio.sh` | **Media** | El camino rápido llamaba a `pactl` sin `PULSE_SERVER` (`Connection refused`) y no se esperaba a que pipewire-pulse aceptara clientes (#6). | **Resuelto** |
 | **BUG-14** | `receptor_audio.sh` | **Media** | WirePlumber negociaba LDAC a 44,1 kHz; la frecuencia ahora va en el mismo heredoc, así que una reconfiguración no la borra (#6). | **Resuelto** |
 | **BUG-15** | `stream_manager.py` / `wsl_manager.py` | **Media** | `usbipd attach` con timeout de 20 s abortaba la sesión aunque el adaptador terminara de conectarse (#6). | **Resuelto** |
+| **BUG-17** | `install.ps1` | **Alta** | Faltaba el firmware de Realtek (`linux-firmware-rtl_bt`): los adaptadores Realtek necesitan que Linux lo cargue de nuevo tras el `usbipd attach` (#7). | **Resuelto** |
+| **BUG-18** | `wsl_manager.py` | **Media** | Si el adaptador no aparecía o no encendía no quedaba ninguna pista en el log; ahora se registran kernel, `dmesg`, firmware y `usbipd list` (#7). | **Resuelto** |
 | **BUG-16** | `install.ps1` | **Media** | Límite de 320 MB en `.wslconfig` provocaba fallos de asignación de páginas del kernel; ahora 512 MB, y el `.wslconfig` previo se respalda (#6). | **Resuelto** |
 
 ---
